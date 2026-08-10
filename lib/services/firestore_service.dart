@@ -1,0 +1,225 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/is_model.dart';
+import '../models/isletme_model.dart';
+import '../models/kayit_model.dart';
+
+/// Yeni oluşturulan bir kaydın üç seviyeli kimliği. Fotoğraf varsa,
+/// çağıran taraf (ekran) bunu PhotoUploadService.kuyrugaEkle'ye geçirir.
+class KayitKimlikleri {
+  final String isId;
+  final String isletmeId;
+  final String kayitId;
+
+  const KayitKimlikleri({
+    required this.isId,
+    required this.isletmeId,
+    required this.kayitId,
+  });
+}
+
+/// Tüm Firestore okuma/yazma işlemlerini tek yerde toplayan servis.
+///
+/// Veri yapısı, HTML mockup'ta üzerinde uzlaşılan üç seviyeli hiyerarşiyi
+/// birebir yansıtır:
+///   isler/{isId}
+///     isletmeler/{isletmeId}
+///       kayitlar/{kayitId}
+///
+/// Not: İşletme belgesinin ID'si, işletme adından türetilen bir "slug"
+/// olarak seçilir (bkz. _slug). Bu sayede "aynı isimde işletme var mı"
+/// sorusunu bir Firestore SORGUSU yerine doğrudan doc(id) ile cevaplayıp
+/// transaction içinde güvenle kullanabiliyoruz — Firestore transaction'ları
+/// sorgu tabanlı okumaları desteklemez, sadece belirli belge referanslarını
+/// okuyabilir.
+///
+/// Firestore'un offline persistence'ı varsayılan olarak açıktır; bu
+/// sayede internet olmayan alanlarda da okuma/yazma çalışır ve bağlantı
+/// gelince otomatik senkronize olur. (Fotoğraflar için ayrı bir kuyruk
+/// gerekiyor — bkz. photo_upload_service.dart)
+class FirestoreService {
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  CollectionReference<Map<String, dynamic>> get _islerRef =>
+      _db.collection('isler');
+
+  CollectionReference<Map<String, dynamic>> _isletmelerRef(String isId) =>
+      _islerRef.doc(isId).collection('isletmeler');
+
+  /// "Motorcu " -> "motorcu", "Kara Çam Yolu" -> "kara-cam-yolu" gibi basit
+  /// bir slug üretir. Türkçe karakterleri sadeleştirir.
+  String _slug(String metin) {
+    final tr = {
+      'ç': 'c', 'Ç': 'c', 'ğ': 'g', 'Ğ': 'g', 'ı': 'i', 'I': 'i',
+      'İ': 'i', 'ö': 'o', 'Ö': 'o', 'ş': 's', 'Ş': 's', 'ü': 'u', 'Ü': 'u',
+    };
+    var sonuc = metin.trim().toLowerCase();
+    tr.forEach((k, v) => sonuc = sonuc.replaceAll(k, v));
+    sonuc = sonuc.replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+    sonuc = sonuc.replaceAll(RegExp(r'^-+|-+$'), '');
+    return sonuc.isEmpty ? 'x' : sonuc;
+  }
+
+  // ---------------------------------------------------------------------
+  // İş (1. seviye) — Ana sayfa / arşiv
+  // ---------------------------------------------------------------------
+
+  /// Ana sayfadaki iş listesini canlı olarak dinler (en yeni en üstte).
+  Stream<List<IsModel>> islerStream() {
+    return _islerRef
+        .orderBy('olusturulmaTarihi', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs.map(IsModel.fromFirestore).toList());
+  }
+
+  Stream<IsModel> isStream(String isId) {
+    return _islerRef.doc(isId).snapshots().map(IsModel.fromFirestore);
+  }
+
+  /// Yeni bir iş oluşturur ve içine ilk işletme+tutar kaydını ekler.
+  /// "Masraf kaydı oluştur" panelindeki akışın karşılığıdır.
+  Future<KayitKimlikleri> yeniIsOlustur({
+    required String isAdi,
+    required String isletmeAdi,
+    required double tutar,
+    String? yerelFotoYolu,
+  }) async {
+    final isRef = _islerRef.doc();
+    await isRef.set(
+      IsModel(
+        id: isRef.id,
+        isim: isAdi,
+        toplam: 0,
+        olusturulmaTarihi: DateTime.now(),
+      ).toFirestore(),
+    );
+
+    return isletmeyeKayitEkle(
+      isId: isRef.id,
+      isletmeAdi: isletmeAdi,
+      tutar: tutar,
+      yerelFotoYolu: yerelFotoYolu,
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // İşletme (2. seviye) — İş detayı içindeki işletme listesi
+  // ---------------------------------------------------------------------
+
+  /// Bir işin altındaki işletmeleri canlı olarak dinler.
+  Stream<List<IsletmeModel>> isletmelerStream(String isId) {
+    return _isletmelerRef(isId)
+        .orderBy('isim')
+        .snapshots()
+        .map((snap) => snap.docs.map(IsletmeModel.fromFirestore).toList());
+  }
+
+  /// Bir işin altına yeni bir masraf kaydı ekler. İşletme daha önce yoksa
+  /// otomatik oluşturulur, varsa toplamı güncellenir. İşletme ID'si adından
+  /// türetildiği (slug) için sorguya gerek kalmadan transaction içinde
+  /// doğrudan doc(id) ile güvenle okunup yazılabiliyor.
+  Future<KayitKimlikleri> isletmeyeKayitEkle({
+    required String isId,
+    required String isletmeAdi,
+    required double tutar,
+    String? yerelFotoYolu,
+  }) async {
+    final isletmeId = _slug(isletmeAdi);
+    final isletmeRef = _isletmelerRef(isId).doc(isletmeId);
+    final isRef = _islerRef.doc(isId);
+    final kayitRef = isletmeRef.collection('kayitlar').doc();
+
+    await _db.runTransaction((tx) async {
+      final isletmeSnap = await tx.get(isletmeRef);
+      final isSnap = await tx.get(isRef);
+
+      final mevcutIsletmeToplam =
+          isletmeSnap.exists ? (isletmeSnap.data()!['toplam'] as num).toDouble() : 0.0;
+      final mevcutIsToplam =
+          isSnap.exists ? (isSnap.data()!['toplam'] as num).toDouble() : 0.0;
+
+      tx.set(
+        isletmeRef,
+        IsletmeModel(id: isletmeId, isim: isletmeAdi, toplam: mevcutIsletmeToplam + tutar)
+            .toFirestore(),
+      );
+
+      tx.set(
+        kayitRef,
+        KayitModel(
+          id: kayitRef.id,
+          tutar: tutar,
+          tarih: DateTime.now(),
+          fotoBekliyor: yerelFotoYolu != null,
+        ).toFirestore(),
+      );
+
+      tx.update(isRef, {'toplam': mevcutIsToplam + tutar});
+    });
+
+    return KayitKimlikleri(isId: isId, isletmeId: isletmeId, kayitId: kayitRef.id);
+  }
+
+  // ---------------------------------------------------------------------
+  // Kayıt (3. seviye) — İşletme detayındaki borç geçmişi
+  // ---------------------------------------------------------------------
+
+  Stream<List<KayitModel>> kayitlarStream(String isId, String isletmeId) {
+    return _isletmelerRef(isId)
+        .doc(isletmeId)
+        .collection('kayitlar')
+        .orderBy('tarih', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs.map(KayitModel.fromFirestore).toList());
+  }
+
+  /// Zaten bilinen bir işletmeye (işletme detay ekranındaki "Borç ekle")
+  /// yeni bir kayıt ekler.
+  Future<KayitKimlikleri> borcEkle({
+    required String isId,
+    required String isletmeId,
+    required double tutar,
+    String? yerelFotoYolu,
+  }) async {
+    final isletmeRef = _isletmelerRef(isId).doc(isletmeId);
+    final isRef = _islerRef.doc(isId);
+    final kayitRef = isletmeRef.collection('kayitlar').doc();
+
+    await _db.runTransaction((tx) async {
+      final isletmeSnap = await tx.get(isletmeRef);
+      final isSnap = await tx.get(isRef);
+
+      final isletmeToplam = (isletmeSnap.data()!['toplam'] as num).toDouble();
+      final isToplam = (isSnap.data()!['toplam'] as num).toDouble();
+
+      tx.set(
+        kayitRef,
+        KayitModel(
+          id: kayitRef.id,
+          tutar: tutar,
+          tarih: DateTime.now(),
+          fotoBekliyor: yerelFotoYolu != null,
+        ).toFirestore(),
+      );
+
+      tx.update(isletmeRef, {'toplam': isletmeToplam + tutar});
+      tx.update(isRef, {'toplam': isToplam + tutar});
+    });
+
+    return KayitKimlikleri(isId: isId, isletmeId: isletmeId, kayitId: kayitRef.id);
+  }
+
+  /// Fotoğraf yüklendikten sonra (bkz. PhotoUploadService) kaydın
+  /// fotoUrl / fotoBekliyor alanlarını günceller.
+  Future<void> kayitFotoGuncelle({
+    required String isId,
+    required String isletmeId,
+    required String kayitId,
+    required String fotoUrl,
+  }) async {
+    await _isletmelerRef(isId)
+        .doc(isletmeId)
+        .collection('kayitlar')
+        .doc(kayitId)
+        .update({'fotoUrl': fotoUrl, 'fotoBekliyor': false});
+  }
+}

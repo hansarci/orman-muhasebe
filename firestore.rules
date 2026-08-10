@@ -1,0 +1,19 @@
+rules_version = '2';
+
+// Kutur M3 / Orjanda'daki yaklaşıma benzer şekilde başlangıç için basit
+// tutuldu. Üretime almadan önce gerçek auth kurallarıyla sıkılaştırın.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /isler/{isId} {
+      allow read, write: if true;
+
+      match /isletmeler/{isletmeId} {
+        allow read, write: if true;
+
+        match /kayitlar/{kayitId} {
+          allow read, write: if true;
+        }
+      }
+    }
+  }
+}
