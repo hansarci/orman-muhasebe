@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "584594310474",
+    "project_id": "orman-muhasebe",
+    "storage_bucket": "orman-muhasebe.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:584594310474:android:f23da3e0dfb3830068edb3",
+        "android_client_info": {
+          "package_name": "com.ormanmuhasebe.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCp29YpHJTFULFXrZRH-uCDr7yuM5LstIA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
