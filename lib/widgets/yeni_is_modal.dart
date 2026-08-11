@@ -1,13 +1,14 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import '../services/firestore_service.dart';
 import '../services/photo_upload_service.dart';
 import '../theme/app_theme.dart';
-import 'fis_foto_secici.dart';
+import '../screens/is_detay_screen.dart';
 
-/// Sağ alttaki yeşil + butonuyla açılan, ekranı tam kaplayan yeni iş kaydı
-/// paneli. Üstteki alan hem başlık hem de doğrudan yazılabilir iş-adı
-/// girişi olarak çalışır (kullanıcının kararlaştırdığı tasarım).
+/// Sağ alttaki yeşil + butonuyla açılan, sadeleştirilmiş yeni iş paneli.
+/// HTML mockup'ta kararlaştırılan yeni tasarım: sabit "YENİ İŞ OLUŞTUR"
+/// başlığı, altında iş adı kutusu, altında tek "İşi Başlat" butonu.
+/// İşletme/tutar/fiş fotoğrafı burada YOK — "İşi Başlat"a basınca boş
+/// bir iş açılıyor ve direkt o işin detay sayfasına geçiliyor.
 Future<void> yeniIsModalAc(
   BuildContext context, {
   required FirestoreService firestoreService,
@@ -39,48 +40,36 @@ class _YeniIsPaneli extends StatefulWidget {
 
 class _YeniIsPaneliState extends State<_YeniIsPaneli> {
   final _isAdiController = TextEditingController();
-  final _isletmeAdiController = TextEditingController();
-  final _tutarController = TextEditingController();
-  File? _secilenFoto;
   bool _kaydediliyor = false;
 
   @override
   void dispose() {
     _isAdiController.dispose();
-    _isletmeAdiController.dispose();
-    _tutarController.dispose();
     super.dispose();
   }
 
-  Future<void> _kaydet() async {
+  Future<void> _isiBaslat() async {
     final isAdi = _isAdiController.text.trim();
-    final isletmeAdi = _isletmeAdiController.text.trim();
-    final tutar = double.tryParse(_tutarController.text.trim());
-
-    if (isAdi.isEmpty || isletmeAdi.isEmpty || tutar == null || tutar <= 0) {
-      return;
-    }
+    if (isAdi.isEmpty) return;
 
     setState(() => _kaydediliyor = true);
 
     try {
-      final kimlikler = await widget.firestoreService.yeniIsOlustur(
-        isAdi: isAdi,
-        isletmeAdi: isletmeAdi,
-        tutar: tutar,
-        yerelFotoYolu: _secilenFoto?.path,
+      final isId = await widget.firestoreService.bosIsOlustur(isAdi: isAdi);
+
+      if (!mounted) return;
+      Navigator.of(context).pop(); // Paneli kapat.
+
+      // Yeni açılan boş işin detayına direkt geç.
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => IsDetayScreen(
+            isId: isId,
+            firestoreService: widget.firestoreService,
+            photoUploadService: widget.photoUploadService,
+          ),
+        ),
       );
-
-      if (_secilenFoto != null) {
-        await widget.photoUploadService.kuyrugaEkle(
-          secilenFoto: _secilenFoto!,
-          isId: kimlikler.isId,
-          isletmeId: kimlikler.isletmeId,
-          kayitId: kimlikler.kayitId,
-        );
-      }
-
-      if (mounted) Navigator.of(context).pop();
     } finally {
       if (mounted) setState(() => _kaydediliyor = false);
     }
@@ -88,10 +77,6 @@ class _YeniIsPaneliState extends State<_YeniIsPaneli> {
 
   @override
   Widget build(BuildContext context) {
-    // Panel ekranın tamamını kaplıyor (sabit yükseklik), kaydırma YOK.
-    // Butonlar içerik listesinin en başında (üstte) durduğu için klavye
-    // açılsa bile görünür kalıyorlar — alttaki boş alan basitçe klavyenin
-    // arkasında kalıyor, önemli değil.
     return SafeArea(
       child: Container(
         height: MediaQuery.of(context).size.height,
@@ -103,79 +88,53 @@ class _YeniIsPaneliState extends State<_YeniIsPaneli> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
+            Stack(
+              alignment: Alignment.center,
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _isAdiController,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 20,
-                      color: AppColors.yazi,
-                      letterSpacing: 0.5,
-                    ),
-                    decoration: const InputDecoration(
-                      hintText: 'İŞ ADI',
-                      border: UnderlineInputBorder(
-                        borderSide: BorderSide(color: AppColors.cizgi),
-                      ),
-                      enabledBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: AppColors.cizgi),
-                      ),
-                      focusedBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: AppColors.turuncu),
-                      ),
-                      filled: false,
-                    ),
+                const Text(
+                  'YENİ İŞ OLUŞTUR',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 20,
+                    letterSpacing: 0.5,
+                    color: AppColors.yazi,
                   ),
                 ),
-                IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close, color: AppColors.yaziSoluk),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close, color: AppColors.yaziSoluk),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _isletmeAdiController,
-                    decoration: const InputDecoration(hintText: 'İşletme Adı'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _tutarController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(hintText: 'Tutar'),
-                  ),
-                ),
-              ],
+            const SizedBox(height: 24),
+            TextField(
+              controller: _isAdiController,
+              autofocus: true,
+              style: const TextStyle(color: AppColors.yazi),
+              decoration: const InputDecoration(hintText: 'İş Adı'),
             ),
             const SizedBox(height: 16),
-            FisFotoSecici(
-              onSecildi: (dosya) => _secilenFoto = dosya,
-              anaButon: OutlinedButton(
-                onPressed: _kaydediliyor ? null : _kaydet,
-                style: AppTheme.anaButonStili(),
-                child: _kaydediliyor
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text('Masraf kaydı oluştur', style: AppTheme.anaButonYazi()),
-                          const SizedBox(width: 10),
-                          const Text('✔✔', style: TextStyle(color: AppColors.yesilTik)),
-                        ],
-                      ),
-              ),
+            OutlinedButton(
+              onPressed: _kaydediliyor ? null : _isiBaslat,
+              style: AppTheme.anaButonStili(),
+              child: _kaydediliyor
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text('İşi Başlat', style: AppTheme.anaButonYazi()),
+                        const SizedBox(width: 10),
+                        const Text('✔✔', style: TextStyle(color: AppColors.yesilTik)),
+                      ],
+                    ),
             ),
           ],
         ),
