@@ -41,7 +41,6 @@ class _YeniIsPaneliState extends State<_YeniIsPaneli> {
   final _isAdiController = TextEditingController();
   final _isletmeAdiController = TextEditingController();
   final _tutarController = TextEditingController();
-  final _fotoKey = GlobalKey<FisFotoSeciciState>();
   File? _secilenFoto;
   bool _kaydediliyor = false;
 
@@ -158,7 +157,6 @@ class _YeniIsPaneliState extends State<_YeniIsPaneli> {
             ),
             const SizedBox(height: 16),
             FisFotoSecici(
-              key: _fotoKey,
               onSecildi: (dosya) => _secilenFoto = dosya,
               anaButon: OutlinedButton(
                 onPressed: _kaydediliyor ? null : _kaydet,
