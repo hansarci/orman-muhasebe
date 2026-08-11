@@ -101,6 +101,23 @@ class FirestoreService {
     );
   }
 
+  /// "İşi Başlat" panelindeki yeni akışın karşılığı — sadece iş adıyla,
+  /// hiç işletme/tutar olmadan boş bir iş açar. İşletmeler daha sonra
+  /// iş detay ekranından tek tek eklenir. Oluşturulan işin ID'sini
+  /// döndürür (detay sayfasına yönlendirmek için).
+  Future<String> bosIsOlustur({required String isAdi}) async {
+    final isRef = _islerRef.doc();
+    await isRef.set(
+      IsModel(
+        id: isRef.id,
+        isim: isAdi,
+        toplam: 0,
+        olusturulmaTarihi: DateTime.now(),
+      ).toFirestore(),
+    );
+    return isRef.id;
+  }
+
   // ---------------------------------------------------------------------
   // İşletme (2. seviye) — İş detayı içindeki işletme listesi
   // ---------------------------------------------------------------------
