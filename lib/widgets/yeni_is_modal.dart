@@ -89,16 +89,24 @@ class _YeniIsPaneliState extends State<_YeniIsPaneli> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Container(
-        height: MediaQuery.of(context).size.height,
-        decoration: const BoxDecoration(
-          color: AppColors.zemin,
-          border: Border(top: BorderSide(color: AppColors.turuncu, width: 2)),
-        ),
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 28),
-        child: SingleChildScrollView(
-          child: Column(
+    // Klavye açıkken de "Masraf kaydı oluştur" butonunun ekranda
+    // kalabilmesi için yükseklik ekranın tamamına DEĞİL, klavyenin
+    // kapladığı alan çıkarılmış haline sabitleniyor.
+    final klavyeYuksekligi = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: klavyeYuksekligi),
+      child: SafeArea(
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.92,
+          ),
+          decoration: const BoxDecoration(
+            color: AppColors.zemin,
+            border: Border(top: BorderSide(color: AppColors.turuncu, width: 2)),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 28),
+          child: SingleChildScrollView(
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
@@ -180,6 +188,7 @@ class _YeniIsPaneliState extends State<_YeniIsPaneli> {
           ),
         ),
       ),
+    ),
     );
   }
 }
