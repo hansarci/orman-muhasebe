@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'screens/arsiv_screen.dart';
 import 'services/firestore_service.dart';
@@ -9,6 +10,11 @@ import 'theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Hive, fotoğraf kuyruğu (PhotoUploadService) tarafından kullanılıyor.
+  // Kutu açmadan önce mutlaka initFlutter() çağrılmalı — yoksa uygulama
+  // sessizce (splash ekranında takılı kalarak) çöker.
+  await Hive.initFlutter();
 
   // Firebase henüz bağlanmadıysa (google-services.json / firebase_options.dart
   // eksikse) uygulama çökmesin diye deneme-yakalama ile sarmalanıyor.
@@ -31,7 +37,11 @@ Future<void> main() async {
   final firestoreService = FirestoreService();
   final photoUploadService = PhotoUploadService(firestoreService);
   if (firebaseHazir) {
-    await photoUploadService.baslat();
+    try {
+      await photoUploadService.baslat();
+    } catch (e) {
+      debugPrint('Fotoğraf kuyruğu başlatılamadı: $e');
+    }
   }
 
   runApp(OrmanMuhasebeApp(
