@@ -82,10 +82,10 @@ class FisFotoSeciciState extends State<FisFotoSecici> {
             ),
           ),
         Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             SizedBox(
               width: 56,
+              height: 64,
               child: OutlinedButton(
                 onPressed: _fotoSec,
                 style: OutlinedButton.styleFrom(
@@ -93,16 +93,21 @@ class FisFotoSeciciState extends State<FisFotoSecici> {
                   side: const BorderSide(color: AppColors.turuncu, width: 2),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   padding: EdgeInsets.zero,
+                  minimumSize: const Size(56, 64),
                 ),
                 child: const Text('📷', style: TextStyle(fontSize: 20)),
               ),
             ),
             const SizedBox(width: 12),
-            Expanded(child: widget.anaButon),
+            Expanded(
+              child: SizedBox(
+                height: 64,
+                child: widget.anaButon,
+              ),
+            ),
           ],
         ),
       ],
     );
   }
 }
-
