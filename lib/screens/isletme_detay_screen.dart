@@ -38,6 +38,10 @@ class _IsletmeDetayScreenState extends State<IsletmeDetayScreen> {
   File? _secilenFoto;
   bool _kaydediliyor = false;
 
+  /// Hangi kaydın "kabarmış" (uzun basılmış) durumda olduğunu tutar.
+  /// Boş bir yere dokununca null'a döner, satır eski haline iner.
+  String? _seciliKayitId;
+
   @override
   void dispose() {
     _tutarController.dispose();
@@ -92,12 +96,17 @@ class _IsletmeDetayScreenState extends State<IsletmeDetayScreen> {
         final isletme = eslesenler.isEmpty ? null : eslesenler.first;
 
         return Scaffold(
-          body: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+          body: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () {
+              if (_seciliKayitId != null) setState(() => _seciliKayitId = null);
+            },
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                   Row(
                     children: [
                       OutlinedButton(
@@ -213,6 +222,8 @@ class _IsletmeDetayScreenState extends State<IsletmeDetayScreen> {
                             final kayit = kayitlar[index];
                             return _DuzenlenebilirKayitSatiri(
                               kayit: kayit,
+                              secili: _seciliKayitId == kayit.id,
+                              onUzunBas: () => setState(() => _seciliKayitId = kayit.id),
                               onFotoTikla: kayit.fotoUrl == null
                                   ? null
                                   : () => fisiBuyukGoster(context, kayit.fotoUrl!),
@@ -225,15 +236,7 @@ class _IsletmeDetayScreenState extends State<IsletmeDetayScreen> {
                                   yeniTutar: yeniTutar,
                                   tur: kayit.tur,
                                 );
-                              },
-                              onSil: () async {
-                                await widget.firestoreService.kayitSil(
-                                  isId: widget.isId,
-                                  isletmeId: widget.isletmeId,
-                                  kayitId: kayit.id,
-                                  tutar: kayit.tutar,
-                                  tur: kayit.tur,
-                                );
+                                setState(() => _seciliKayitId = null);
                               },
                             );
                           },
@@ -244,6 +247,7 @@ class _IsletmeDetayScreenState extends State<IsletmeDetayScreen> {
                 ],
               ),
             ),
+          ),
           ),
         );
       },
@@ -310,15 +314,17 @@ class _KameraButonuState extends State<_KameraButonu> {
 /// ve "Düzenle" / "Sil" butonları belirir.
 class _DuzenlenebilirKayitSatiri extends StatefulWidget {
   final KayitModel kayit;
+  final bool secili;
+  final VoidCallback onUzunBas;
   final VoidCallback? onFotoTikla;
   final ValueChanged<double> onDuzenle;
-  final VoidCallback onSil;
 
   const _DuzenlenebilirKayitSatiri({
     required this.kayit,
+    required this.secili,
+    required this.onUzunBas,
     required this.onFotoTikla,
     required this.onDuzenle,
-    required this.onSil,
   });
 
   @override
@@ -326,7 +332,6 @@ class _DuzenlenebilirKayitSatiri extends StatefulWidget {
 }
 
 class _DuzenlenebilirKayitSatiriState extends State<_DuzenlenebilirKayitSatiri> {
-  bool _secili = false;
   bool _duzenleniyor = false;
   late TextEditingController _duzenleController;
 
@@ -340,31 +345,6 @@ class _DuzenlenebilirKayitSatiriState extends State<_DuzenlenebilirKayitSatiri> 
   void dispose() {
     _duzenleController.dispose();
     super.dispose();
-  }
-
-  Future<void> _silmeyiOnayla() async {
-    final onay = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.panel,
-        title: const Text('Kaydı sil', style: TextStyle(color: AppColors.yazi)),
-        content: const Text(
-          'Bu kaydı silmek istediğine emin misin? Toplam otomatik güncellenecek.',
-          style: TextStyle(color: AppColors.yaziSoluk),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Vazgeç'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Sil', style: TextStyle(color: Colors.redAccent)),
-          ),
-        ],
-      ),
-    );
-    if (onay == true) widget.onSil();
   }
 
   @override
@@ -400,18 +380,12 @@ class _DuzenlenebilirKayitSatiriState extends State<_DuzenlenebilirKayitSatiri> 
               onPressed: () {
                 final yeni = double.tryParse(_duzenleController.text.trim());
                 if (yeni != null && yeni > 0) widget.onDuzenle(yeni);
-                setState(() {
-                  _duzenleniyor = false;
-                  _secili = false;
-                });
+                setState(() => _duzenleniyor = false);
               },
             ),
             IconButton(
               icon: const Icon(Icons.close, color: AppColors.turuncu, size: 20),
-              onPressed: () => setState(() {
-                _duzenleniyor = false;
-                _secili = false;
-              }),
+              onPressed: () => setState(() => _duzenleniyor = false),
             ),
           ],
         ),
@@ -419,9 +393,12 @@ class _DuzenlenebilirKayitSatiriState extends State<_DuzenlenebilirKayitSatiri> 
     }
 
     return GestureDetector(
-      onLongPress: () => setState(() => _secili = true),
+      onLongPress: widget.onUzunBas,
+      onTap: () {}, // Boş dokunuşu "yutar" — üstteki ekran genelindeki
+      // GestureDetector'a ulaşmasını engeller, böylece satırın kendisine
+      // dokunmak seçimi KAPATMAZ (sadece dışarıya dokunmak kapatır).
       child: AnimatedScale(
-        scale: _secili ? 1.03 : 1.0,
+        scale: widget.secili ? 1.03 : 1.0,
         duration: const Duration(milliseconds: 150),
         child: Container(
           margin: const EdgeInsets.only(bottom: 8),
@@ -430,13 +407,13 @@ class _DuzenlenebilirKayitSatiriState extends State<_DuzenlenebilirKayitSatiri> 
             color: AppColors.panel,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: _secili
+              color: widget.secili
                   ? AppColors.turuncu
                   : (widget.kayit.odemeMi
                       ? const Color(0x334CAF6D)
                       : const Color(0x33D9611E)),
             ),
-            boxShadow: _secili
+            boxShadow: widget.secili
                 ? [const BoxShadow(color: Colors.black45, blurRadius: 12, offset: Offset(0, 4))]
                 : null,
           ),
@@ -481,16 +458,12 @@ class _DuzenlenebilirKayitSatiriState extends State<_DuzenlenebilirKayitSatiri> 
                   ],
                 ),
               ),
-              if (_secili) ...[
+              if (widget.secili)
                 TextButton(
                   onPressed: () => setState(() => _duzenleniyor = true),
                   child: const Text('Düzenle', style: TextStyle(fontSize: 12, color: AppColors.turuncu)),
-                ),
-                TextButton(
-                  onPressed: _silmeyiOnayla,
-                  child: const Text('Sil', style: TextStyle(fontSize: 12, color: Colors.redAccent)),
-                ),
-              ] else
+                )
+              else
                 RichText(
                   text: TextSpan(
                     style: TextStyle(
