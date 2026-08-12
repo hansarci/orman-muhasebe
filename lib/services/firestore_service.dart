@@ -225,6 +225,100 @@ class FirestoreService {
     return KayitKimlikleri(isId: isId, isletmeId: isletmeId, kayitId: kayitRef.id);
   }
 
+  /// İşletme detayındaki "Ödeme Yap" — borcEkle'nin tersi: toplamı ARTIRMAK
+  /// yerine DÜŞÜRÜR, kaydı tur:'odeme' olarak işaretler.
+  Future<KayitKimlikleri> odemeEkle({
+    required String isId,
+    required String isletmeId,
+    required double tutar,
+  }) async {
+    final isletmeRef = _isletmelerRef(isId).doc(isletmeId);
+    final isRef = _islerRef.doc(isId);
+    final kayitRef = isletmeRef.collection('kayitlar').doc();
+
+    await _db.runTransaction((tx) async {
+      final isletmeSnap = await tx.get(isletmeRef);
+      final isSnap = await tx.get(isRef);
+
+      final isletmeToplam = (isletmeSnap.data()!['toplam'] as num).toDouble();
+      final isToplam = (isSnap.data()!['toplam'] as num).toDouble();
+
+      tx.set(
+        kayitRef,
+        KayitModel(
+          id: kayitRef.id,
+          tutar: tutar,
+          tarih: DateTime.now(),
+          tur: 'odeme',
+        ).toFirestore(),
+      );
+
+      tx.update(isletmeRef, {'toplam': isletmeToplam - tutar});
+      tx.update(isRef, {'toplam': isToplam - tutar});
+    });
+
+    return KayitKimlikleri(isId: isId, isletmeId: isletmeId, kayitId: kayitRef.id);
+  }
+
+  /// Bir kaydın tutarını değiştirir; işletme ve iş toplamlarını farka göre
+  /// günceller. Ödeme kayıtlarında etki ters (toplamı düşürücü) yönde olur.
+  Future<void> kayitDuzenle({
+    required String isId,
+    required String isletmeId,
+    required String kayitId,
+    required double eskiTutar,
+    required double yeniTutar,
+    required String tur,
+  }) async {
+    if (yeniTutar == eskiTutar) return;
+
+    final etki = tur == 'odeme' ? -1 : 1;
+    final fark = (yeniTutar - eskiTutar) * etki;
+
+    final isletmeRef = _isletmelerRef(isId).doc(isletmeId);
+    final isRef = _islerRef.doc(isId);
+    final kayitRef = isletmeRef.collection('kayitlar').doc(kayitId);
+
+    await _db.runTransaction((tx) async {
+      final isletmeSnap = await tx.get(isletmeRef);
+      final isSnap = await tx.get(isRef);
+      final isletmeToplam = (isletmeSnap.data()!['toplam'] as num).toDouble();
+      final isToplam = (isSnap.data()!['toplam'] as num).toDouble();
+
+      tx.update(kayitRef, {'tutar': yeniTutar});
+      tx.update(isletmeRef, {'toplam': isletmeToplam + fark});
+      tx.update(isRef, {'toplam': isToplam + fark});
+    });
+  }
+
+  /// Bir kaydı siler; o kaydın işletme/iş toplamlarına yaptığı etkiyi geri
+  /// alır (borç kaydıysa toplamdan düşer, ödeme kaydıysa toplama eklenir).
+  Future<void> kayitSil({
+    required String isId,
+    required String isletmeId,
+    required String kayitId,
+    required double tutar,
+    required String tur,
+  }) async {
+    final etki = tur == 'odeme' ? -1 : 1;
+    final geriAl = -(tutar * etki);
+
+    final isletmeRef = _isletmelerRef(isId).doc(isletmeId);
+    final isRef = _islerRef.doc(isId);
+    final kayitRef = isletmeRef.collection('kayitlar').doc(kayitId);
+
+    await _db.runTransaction((tx) async {
+      final isletmeSnap = await tx.get(isletmeRef);
+      final isSnap = await tx.get(isRef);
+      final isletmeToplam = (isletmeSnap.data()!['toplam'] as num).toDouble();
+      final isToplam = (isSnap.data()!['toplam'] as num).toDouble();
+
+      tx.delete(kayitRef);
+      tx.update(isletmeRef, {'toplam': isletmeToplam + geriAl});
+      tx.update(isRef, {'toplam': isToplam + geriAl});
+    });
+  }
+
   /// Fotoğraf yüklendikten sonra (bkz. PhotoUploadService) kaydın
   /// fotoUrl / fotoBekliyor alanlarını günceller.
   Future<void> kayitFotoGuncelle({
