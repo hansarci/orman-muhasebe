@@ -1,12 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Bir işletmeye ait tek bir borç kaydı (tarih + tutar + opsiyonel fiş fotoğrafı).
+/// Bir işletmeye ait tek bir kayıt — borç ('borc') veya ödeme ('odeme').
+/// Ödeme kayıtları toplamdan DÜŞER, borç kayıtları toplama EKLENİR.
 ///
 /// Firestore yolu: isler/{isId}/isletmeler/{isletmeId}/kayitlar/{kayitId}
 class KayitModel {
   final String id;
   final double tutar;
   final DateTime tarih;
+
+  /// 'borc' veya 'odeme'. Eski kayıtlarda bu alan yoksa 'borc' varsayılır.
+  final String tur;
 
   /// Firebase Storage'daki fişin indirilebilir URL'i. Henüz yüklenmediyse
   /// (offline kuyrukta bekliyorsa) null olabilir.
@@ -19,9 +23,12 @@ class KayitModel {
     required this.id,
     required this.tutar,
     required this.tarih,
+    this.tur = 'borc',
     this.fotoUrl,
     this.fotoBekliyor = false,
   });
+
+  bool get odemeMi => tur == 'odeme';
 
   factory KayitModel.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data()!;
@@ -29,6 +36,7 @@ class KayitModel {
       id: doc.id,
       tutar: (data['tutar'] as num).toDouble(),
       tarih: (data['tarih'] as Timestamp).toDate(),
+      tur: data['tur'] as String? ?? 'borc',
       fotoUrl: data['fotoUrl'] as String?,
       fotoBekliyor: data['fotoBekliyor'] as bool? ?? false,
     );
@@ -38,6 +46,7 @@ class KayitModel {
     return {
       'tutar': tutar,
       'tarih': Timestamp.fromDate(tarih),
+      'tur': tur,
       'fotoUrl': fotoUrl,
       'fotoBekliyor': fotoBekliyor,
     };
