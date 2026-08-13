@@ -317,12 +317,9 @@ class _KameraButonuState extends State<_KameraButonu> {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (widget.secilenFoto != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: Image.file(widget.secilenFoto!, width: 24, height: 24, fit: BoxFit.cover),
-            ),
+          const Padding(
+            padding: EdgeInsets.only(bottom: 6),
+            child: Icon(Icons.check_circle, color: AppColors.yesilTik, size: 20),
           ),
         SizedBox(
           width: 56,
@@ -462,12 +459,9 @@ class _DuzenlenebilirKayitSatiriState extends State<_DuzenlenebilirKayitSatiri> 
                         child: InkWell(
                           borderRadius: BorderRadius.circular(8),
                           onTap: widget.onFotoTikla,
-                          child: Padding(
-                            padding: const EdgeInsets.all(6),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(6),
-                              child: Image.network(widget.kayit.fotoUrl!, width: 32, height: 32, fit: BoxFit.cover),
-                            ),
+                          child: const Padding(
+                            padding: EdgeInsets.all(6),
+                            child: Icon(Icons.receipt_long, color: AppColors.yesilTik, size: 20),
                           ),
                         ),
                       ),
