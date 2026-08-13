@@ -33,9 +33,41 @@ class FisFotoSeciciState extends State<FisFotoSecici> {
   }
 
   Future<void> _fotoSec() async {
+    final secim = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: AppColors.panel,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined, color: AppColors.turuncu),
+              title: const Text('Kameradan çek', style: TextStyle(color: AppColors.yazi)),
+              onTap: () => Navigator.of(context).pop(ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined, color: AppColors.turuncu),
+              title: const Text('Galeriden seç', style: TextStyle(color: AppColors.yazi)),
+              subtitle: const Text(
+                'Ör. WhatsApp\'tan gelen fiş fotoğrafı',
+                style: TextStyle(color: AppColors.yaziSoluk, fontSize: 11.5),
+              ),
+              onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (secim == null) return;
+
     final secici = ImagePicker();
     final sonuc = await secici.pickImage(
-      source: ImageSource.camera,
+      source: secim,
       imageQuality: 70, // Zayıf sinyalde yükleme boyutunu küçük tutmak için.
       maxWidth: 1600,
     );
