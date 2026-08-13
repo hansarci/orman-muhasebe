@@ -93,16 +93,13 @@ class FisFotoSeciciState extends State<FisFotoSecici> {
             ),
             child: Row(
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: Image.file(
-                    _secilenDosya!,
-                    width: 48,
-                    height: 48,
-                    fit: BoxFit.cover,
-                  ),
-                ),
+                const Icon(Icons.receipt_long, color: AppColors.yesilTik, size: 28),
                 const SizedBox(width: 12),
+                const Text(
+                  'Fiş seçildi',
+                  style: TextStyle(color: AppColors.yazi, fontSize: 13),
+                ),
+                const Spacer(),
                 TextButton(
                   onPressed: temizle,
                   child: const Text(
