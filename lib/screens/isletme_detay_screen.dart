@@ -268,10 +268,43 @@ class _KameraButonu extends StatefulWidget {
 }
 
 class _KameraButonuState extends State<_KameraButonu> {
-  Future<void> _fotoSec() async {
+  Future<void> _fotoSecMenusunuAc() async {
+    final secim = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: AppColors.panel,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined, color: AppColors.turuncu),
+              title: const Text('Kameradan çek', style: TextStyle(color: AppColors.yazi)),
+              onTap: () => Navigator.of(context).pop(ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined, color: AppColors.turuncu),
+              title: const Text('Galeriden seç', style: TextStyle(color: AppColors.yazi)),
+              subtitle: const Text(
+                'Ör. WhatsApp\'tan gelen fiş fotoğrafı',
+                style: TextStyle(color: AppColors.yaziSoluk, fontSize: 11.5),
+              ),
+              onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+
+    if (secim == null) return;
+
     final secici = ImagePicker();
     final sonuc = await secici.pickImage(
-      source: ImageSource.camera,
+      source: secim,
       imageQuality: 70,
       maxWidth: 1600,
     );
@@ -295,7 +328,7 @@ class _KameraButonuState extends State<_KameraButonu> {
           width: 56,
           height: 56,
           child: OutlinedButton(
-            onPressed: _fotoSec,
+            onPressed: _fotoSecMenusunuAc,
             style: OutlinedButton.styleFrom(
               backgroundColor: const Color(0xFF2A2E31),
               side: const BorderSide(color: Color(0xFF9AA0A6), width: 2),
@@ -458,26 +491,61 @@ class _DuzenlenebilirKayitSatiriState extends State<_DuzenlenebilirKayitSatiri> 
                   ],
                 ),
               ),
-              if (widget.secili)
-                TextButton(
-                  onPressed: () => setState(() => _duzenleniyor = true),
-                  child: const Text('Düzenle', style: TextStyle(fontSize: 12, color: AppColors.turuncu)),
-                )
-              else
-                RichText(
-                  text: TextSpan(
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13.5,
-                      color: widget.kayit.odemeMi ? AppColors.yesilTik : AppColors.turuncu,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RichText(
+                    text: TextSpan(
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13.5,
+                        color: widget.kayit.odemeMi ? AppColors.yesilTik : AppColors.turuncu,
+                      ),
+                      children: [
+                        TextSpan(text: widget.kayit.odemeMi ? '− ' : ''),
+                        TextSpan(text: paraFormatla(widget.kayit.tutar)),
+                        const TextSpan(text: ' ₺', style: TextStyle(color: AppColors.yesilTik)),
+                      ],
                     ),
-                    children: [
-                      TextSpan(text: widget.kayit.odemeMi ? '− ' : ''),
-                      TextSpan(text: paraFormatla(widget.kayit.tutar)),
-                      const TextSpan(text: ' ₺', style: TextStyle(color: AppColors.yesilTik)),
-                    ],
                   ),
-                ),
+                  if (widget.secili) ...[
+                    const SizedBox(width: 10),
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppColors.turuncu.withOpacity(0.5)),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: TextButton(
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () => setState(() => _duzenleniyor = true),
+                        child: const Text('Tutar Düzenle', style: TextStyle(fontSize: 12, color: AppColors.turuncu)),
+                      ),
+                    ),
+                    if (widget.kayit.fotoUrl != null) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: AppColors.yesilTik.withOpacity(0.5)),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: TextButton(
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          onPressed: widget.onFotoTikla,
+                          child: const Text('Fişi Gör', style: TextStyle(fontSize: 12, color: AppColors.yesilTik)),
+                        ),
+                      ),
+                    ],
+                  ],
+                ],
+              ),
             ],
           ),
         ),
