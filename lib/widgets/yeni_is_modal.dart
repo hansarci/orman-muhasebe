@@ -55,7 +55,9 @@ class _YeniIsPaneliState extends State<_YeniIsPaneli> {
     setState(() => _kaydediliyor = true);
 
     try {
-      final isId = await widget.firestoreService.bosIsOlustur(isAdi: isAdi);
+      final isId = await widget.firestoreService
+          .bosIsOlustur(isAdi: isAdi)
+          .timeout(const Duration(seconds: 15));
 
       if (!mounted) return;
       Navigator.of(context).pop(); // Paneli kapat.
@@ -70,6 +72,16 @@ class _YeniIsPaneliState extends State<_YeniIsPaneli> {
           ),
         ),
       );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Hata: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _kaydediliyor = false);
     }
@@ -114,6 +126,7 @@ class _YeniIsPaneliState extends State<_YeniIsPaneli> {
             TextField(
               controller: _isAdiController,
               autofocus: true,
+              textCapitalization: TextCapitalization.sentences,
               style: const TextStyle(color: AppColors.yazi),
               decoration: const InputDecoration(hintText: 'İş Adı'),
             ),
