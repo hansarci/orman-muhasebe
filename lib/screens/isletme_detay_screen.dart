@@ -454,18 +454,10 @@ class _DuzenlenebilirKayitSatiriState extends State<_DuzenlenebilirKayitSatiri> 
                 child: Row(
                   children: [
                     if (widget.kayit.fotoUrl != null) ...[
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(8),
-                          onTap: widget.onFotoTikla,
-                          child: const Padding(
-                            padding: EdgeInsets.all(6),
-                            child: Icon(Icons.receipt_long, color: AppColors.yesilTik, size: 20),
-                          ),
-                        ),
+                      const Padding(
+                        padding: EdgeInsets.only(right: 4),
+                        child: Icon(Icons.receipt_long, color: AppColors.yesilTik, size: 18),
                       ),
-                      const SizedBox(width: 4),
                     ],
                     Text(tarihFormatla(widget.kayit.tarih), style: const TextStyle(fontSize: 13.5, color: AppColors.yazi)),
                     if (widget.kayit.odemeMi) ...[
