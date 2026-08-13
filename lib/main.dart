@@ -42,6 +42,10 @@ Future<void> main() async {
     } catch (e) {
       debugPrint('Fotoğraf kuyruğu başlatılamadı: $e');
     }
+    // Uygulama açılışını bekletmeden, arka planda 1 yıldan eski fiş
+    // fotoğraflarını sessizce temizler. Kayıtların kendisine dokunmaz.
+    // ignore: unawaited_futures
+    firestoreService.eskiFisleriTemizle();
   }
 
   runApp(OrmanMuhasebeApp(
