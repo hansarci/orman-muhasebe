@@ -120,7 +120,7 @@ class _IsletmeDetayScreenState extends State<IsletmeDetayScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    isletme?.isim.toUpperCase() ?? '',
+                    turkceBuyukHarf(isletme?.isim ?? ''),
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontWeight: FontWeight.w600,
