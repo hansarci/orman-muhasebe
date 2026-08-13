@@ -12,6 +12,9 @@ import 'isletme_detay_screen.dart';
 /// Bir işin (ör. "Ballıdağ") içindeki işletmeleri listeleyen ve yeni bir
 /// işletme+tutar kaydı eklemeyi sağlayan ekran. Header'da hep iş adı
 /// sabit durur — alttaki gövdede tekrar yazılmaz.
+///
+/// Fiş fotoğrafı EKLEMEK opsiyonel: kamera butonuna basılmazsa hiçbir
+/// Storage işlemi tetiklenmez, kayıt fotoğrafsız kaydedilir.
 class IsDetayScreen extends StatefulWidget {
   final String isId;
   final FirestoreService firestoreService;
@@ -55,6 +58,7 @@ class _IsDetayScreenState extends State<IsDetayScreen> {
         yerelFotoYolu: _secilenFoto?.path,
       );
 
+      // Sadece fotoğraf gerçekten seçildiyse Storage'a yükleme dener.
       if (_secilenFoto != null) {
         await widget.photoUploadService.kuyrugaEkle(
           secilenFoto: _secilenFoto!,
@@ -84,7 +88,7 @@ class _IsDetayScreenState extends State<IsDetayScreen> {
             title: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(is_?.isim.toUpperCase() ?? ''),
+                Text(turkceBuyukHarf(is_?.isim ?? '')),
                 const Text(
                   'MASRAF KAYITLARI',
                   style: TextStyle(
@@ -108,6 +112,7 @@ class _IsDetayScreenState extends State<IsDetayScreen> {
                     Expanded(
                       child: TextField(
                         controller: _isletmeAdiController,
+                        textCapitalization: TextCapitalization.sentences,
                         decoration: const InputDecoration(hintText: 'İşletme Adı'),
                       ),
                     ),
