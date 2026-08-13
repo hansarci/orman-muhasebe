@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import '../models/is_model.dart';
 import '../models/isletme_model.dart';
 import '../models/kayit_model.dart';
@@ -332,5 +333,38 @@ class FirestoreService {
         .collection('kayitlar')
         .doc(kayitId)
         .update({'fotoUrl': fotoUrl, 'fotoBekliyor': false});
+  }
+
+  /// 1 yıldan eski kayıtların FİŞ FOTOĞRAFLARINI Storage'dan siler.
+  /// Kaydın kendisi (tutar, tarih, işletme) HİÇ SİLİNMEZ — sadece görsel
+  /// kaldırılır ve fotoUrl alanı boşaltılır. Uygulama açılışında bir kere
+  /// çağrılması yeterli; sessizce çalışır, hata olursa yutar (kritik değil).
+  Future<void> eskiFisleriTemizle() async {
+    try {
+      final esikTarih = DateTime.now().subtract(const Duration(days: 365));
+
+      final sorguSonucu = await _db
+          .collectionGroup('kayitlar')
+          .where('tarih', isLessThan: Timestamp.fromDate(esikTarih))
+          .get();
+
+      for (final belge in sorguSonucu.docs) {
+        final data = belge.data();
+        final fotoUrl = data['fotoUrl'] as String?;
+        if (fotoUrl == null) continue; // Zaten fotoğrafı yok, atla.
+
+        try {
+          await FirebaseStorage.instance.refFromURL(fotoUrl).delete();
+        } catch (_) {
+          // Storage'da dosya zaten silinmiş olabilir — yine de Firestore
+          // tarafını temizlemeye devam ediyoruz.
+        }
+
+        await belge.reference.update({'fotoUrl': null, 'fotoBekliyor': false});
+      }
+    } catch (e) {
+      // Bağlantı yoksa ya da gerekli Firestore index'i henüz oluşmadıysa
+      // sessizce vazgeç — bir sonraki açılışta tekrar denenecek.
+    }
   }
 }
