@@ -86,6 +86,14 @@ String tarihFormatla(DateTime tarih) {
 
 String paraFormatla(double tutar) => _paraFormat.format(tutar);
 
+/// Dart'ın standart `toUpperCase()`'i Türkçe'ye uygun değil — "iş" gibi
+/// kelimelerdeki noktalı küçük "i"yi yanlışlıkla noktasız "I" yapıyor
+/// (doğrusu "İ" olmalı). Sayfa başlıkları gibi Türkçe metinleri büyük
+/// harfe çevirirken bunun yerine bu fonksiyon kullanılmalı.
+String turkceBuyukHarf(String metin) {
+  return metin.replaceAll('i', 'İ').toUpperCase();
+}
+
 /// İşletme detayındaki "Geçmiş Kayıtlar" listesinin tek satırı.
 /// Fişi varsa solda küçük thumbnail, tıklanınca büyütülüyor.
 class GecmisKayitSatiri extends StatelessWidget {
@@ -120,19 +128,33 @@ class GecmisKayitSatiri extends StatelessWidget {
           Row(
             children: [
               if (fotoUrl != null) ...[
-                GestureDetector(
-                  onTap: onFotoTikla,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: Image.network(
-                      fotoUrl!,
-                      width: 32,
-                      height: 32,
-                      fit: BoxFit.cover,
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: onFotoTikla,
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: Image.network(
+                          fotoUrl!,
+                          width: 32,
+                          height: 32,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            width: 32,
+                            height: 32,
+                            color: AppColors.zemin,
+                            child: const Icon(Icons.broken_image_outlined,
+                                size: 16, color: AppColors.yaziSoluk),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 4),
               ] else if (fotoBekliyor) ...[
                 const SizedBox(
                   width: 32,
