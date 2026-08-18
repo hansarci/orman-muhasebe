@@ -42,6 +42,31 @@ class _IsletmeDetayScreenState extends State<IsletmeDetayScreen> {
   /// Boş bir yere dokununca null'a döner, satır eski haline iner.
   String? _seciliKayitId;
 
+  /// "Hızlı Filtreleme" dropdown'ından seçilen filtre. null = Tümü.
+  String? _seciliFiltre;
+
+  static const _filtreSecenekleri = [
+    'Fişli Borçlar',
+    'Fişsiz Borçlar',
+    'Ödenenler',
+    'Ödenmeyenler',
+  ];
+
+  List<KayitModel> _filtrele(List<KayitModel> kayitlar) {
+    switch (_seciliFiltre) {
+      case 'Fişli Borçlar':
+        return kayitlar.where((k) => !k.odemeMi && k.fotoUrl != null).toList();
+      case 'Fişsiz Borçlar':
+        return kayitlar.where((k) => !k.odemeMi && k.fotoUrl == null).toList();
+      case 'Ödenenler':
+        return kayitlar.where((k) => k.odemeMi).toList();
+      case 'Ödenmeyenler':
+        return kayitlar.where((k) => !k.odemeMi).toList();
+      default:
+        return kayitlar;
+    }
+  }
+
   @override
   void dispose() {
     _tutarController.dispose();
@@ -200,6 +225,42 @@ class _IsletmeDetayScreenState extends State<IsletmeDetayScreen> {
                     ],
                   ),
 
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.panel,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.cizgi),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String?>(
+                        value: _seciliFiltre,
+                        isExpanded: true,
+                        dropdownColor: AppColors.panel,
+                        icon: const Icon(Icons.filter_list, color: AppColors.turuncu, size: 18),
+                        hint: const Text(
+                          'Tüm Borçlar',
+                          style: TextStyle(color: AppColors.yaziSoluk, fontSize: 13),
+                        ),
+                        style: const TextStyle(color: AppColors.yazi, fontSize: 13),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('Tüm Borçlar', style: TextStyle(color: AppColors.yaziSoluk)),
+                          ),
+                          ..._filtreSecenekleri.map(
+                            (secenek) => DropdownMenuItem<String?>(
+                              value: secenek,
+                              child: Text(secenek),
+                            ),
+                          ),
+                        ],
+                        onChanged: (yeniDeger) => setState(() => _seciliFiltre = yeniDeger),
+                      ),
+                    ),
+                  ),
+
                   const SizedBox(height: 24),
                   const Text(
                     'GEÇMİŞ KAYITLAR',
@@ -210,10 +271,15 @@ class _IsletmeDetayScreenState extends State<IsletmeDetayScreen> {
                     child: StreamBuilder<List<KayitModel>>(
                       stream: widget.firestoreService.kayitlarStream(widget.isId, widget.isletmeId),
                       builder: (context, snapshot) {
-                        final kayitlar = snapshot.data ?? [];
+                        final kayitlar = _filtrele(snapshot.data ?? []);
                         if (kayitlar.isEmpty) {
-                          return const Center(
-                            child: Text('Henüz kayıt yok.', style: TextStyle(color: AppColors.yaziSoluk)),
+                          return Center(
+                            child: Text(
+                              _seciliFiltre == null
+                                  ? 'Henüz kayıt yok.'
+                                  : 'Bu filtreye uygun kayıt yok.',
+                              style: const TextStyle(color: AppColors.yaziSoluk),
+                            ),
                           );
                         }
                         return ListView.builder(
