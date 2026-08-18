@@ -27,16 +27,16 @@ class KayitKimlikleri {
 ///       kayitlar/{kayitId}
 ///
 /// Not: İşletme belgesinin ID'si, işletme adından türetilen bir "slug"
-/// olarak seçilir (bkz. _slug). Bu sayede "aynı isimde işletme var mı"
-/// sorusunu bir Firestore SORGUSU yerine doğrudan doc(id) ile cevaplayıp
-/// transaction içinde güvenle kullanabiliyoruz — Firestore transaction'ları
-/// sorgu tabanlı okumaları desteklemez, sadece belirli belge referanslarını
-/// okuyabilir.
+/// olarak seçilir (bkz. _slug). Böylece "bu işletme zaten var mı" sorusu
+/// bir Firestore SORGUSU gerektirmeden, doğrudan doc(id) ile cevaplanabiliyor.
 ///
-/// Firestore'un offline persistence'ı varsayılan olarak açıktır; bu
-/// sayede internet olmayan alanlarda da okuma/yazma çalışır ve bağlantı
-/// gelince otomatik senkronize olur. (Fotoğraflar için ayrı bir kuyruk
-/// gerekiyor — bkz. photo_upload_service.dart)
+/// ÖNEMLİ — offline çalışma: toplamları güncellerken bilerek Firestore
+/// "transaction"ları KULLANILMIYOR. Transaction'lar sunucudan güncel veri
+/// okumayı gerektirdiği için internet olmadan tamamen çalışmıyor (sonsuza
+/// kadar bekliyor/başarısız oluyor). Bunun yerine `FieldValue.increment()`
+/// kullanılıyor — bu, hem online hem offline çalışan, yerel önbelleğe
+/// hemen yazılıp bağlantı gelince sunucuyla senkronize olan atomik bir
+/// artırma/azaltma işlemi.
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
@@ -77,7 +77,6 @@ class FirestoreService {
   }
 
   /// Yeni bir iş oluşturur ve içine ilk işletme+tutar kaydını ekler.
-  /// "Masraf kaydı oluştur" panelindeki akışın karşılığıdır.
   Future<KayitKimlikleri> yeniIsOlustur({
     required String isAdi,
     required String isletmeAdi,
@@ -102,10 +101,9 @@ class FirestoreService {
     );
   }
 
-  /// "İşi Başlat" panelindeki yeni akışın karşılığı — sadece iş adıyla,
-  /// hiç işletme/tutar olmadan boş bir iş açar. İşletmeler daha sonra
-  /// iş detay ekranından tek tek eklenir. Oluşturulan işin ID'sini
-  /// döndürür (detay sayfasına yönlendirmek için).
+  /// "İşi Başlat" panelindeki akışın karşılığı — sadece iş adıyla, hiç
+  /// işletme/tutar olmadan boş bir iş açar. İşletmeler daha sonra iş
+  /// detay ekranından tek tek eklenir. Oluşturulan işin ID'sini döndürür.
   Future<String> bosIsOlustur({required String isAdi}) async {
     final isRef = _islerRef.doc();
     await isRef.set(
@@ -132,9 +130,9 @@ class FirestoreService {
   }
 
   /// Bir işin altına yeni bir masraf kaydı ekler. İşletme daha önce yoksa
-  /// otomatik oluşturulur, varsa toplamı güncellenir. İşletme ID'si adından
-  /// türetildiği (slug) için sorguya gerek kalmadan transaction içinde
-  /// doğrudan doc(id) ile güvenle okunup yazılabiliyor.
+  /// otomatik oluşturulur (merge:true + increment sayesinde tek yazımda),
+  /// varsa toplamı artırılır. İnternet olmadan da çalışır: yazım önce
+  /// yerel önbelleğe alınır, bağlantı gelince sunucuya senkronize olur.
   Future<KayitKimlikleri> isletmeyeKayitEkle({
     required String isId,
     required String isletmeAdi,
@@ -146,33 +144,28 @@ class FirestoreService {
     final isRef = _islerRef.doc(isId);
     final kayitRef = isletmeRef.collection('kayitlar').doc();
 
-    await _db.runTransaction((tx) async {
-      final isletmeSnap = await tx.get(isletmeRef);
-      final isSnap = await tx.get(isRef);
+    await isletmeRef.set(
+      {
+        'isim': isletmeAdi,
+        'toplam': FieldValue.increment(tutar),
+      },
+      SetOptions(merge: true),
+    );
 
-      final mevcutIsletmeToplam =
-          isletmeSnap.exists ? (isletmeSnap.data()!['toplam'] as num).toDouble() : 0.0;
-      final mevcutIsToplam =
-          isSnap.exists ? (isSnap.data()!['toplam'] as num).toDouble() : 0.0;
+    await kayitRef.set(
+      KayitModel(
+        id: kayitRef.id,
+        tutar: tutar,
+        tarih: DateTime.now(),
+        tur: 'borc',
+        fotoBekliyor: yerelFotoYolu != null,
+      ).toFirestore(),
+    );
 
-      tx.set(
-        isletmeRef,
-        IsletmeModel(id: isletmeId, isim: isletmeAdi, toplam: mevcutIsletmeToplam + tutar)
-            .toFirestore(),
-      );
-
-      tx.set(
-        kayitRef,
-        KayitModel(
-          id: kayitRef.id,
-          tutar: tutar,
-          tarih: DateTime.now(),
-          fotoBekliyor: yerelFotoYolu != null,
-        ).toFirestore(),
-      );
-
-      tx.update(isRef, {'toplam': mevcutIsToplam + tutar});
-    });
+    await isRef.set(
+      {'toplam': FieldValue.increment(tutar)},
+      SetOptions(merge: true),
+    );
 
     return KayitKimlikleri(isId: isId, isletmeId: isletmeId, kayitId: kayitRef.id);
   }
@@ -202,26 +195,24 @@ class FirestoreService {
     final isRef = _islerRef.doc(isId);
     final kayitRef = isletmeRef.collection('kayitlar').doc();
 
-    await _db.runTransaction((tx) async {
-      final isletmeSnap = await tx.get(isletmeRef);
-      final isSnap = await tx.get(isRef);
+    await kayitRef.set(
+      KayitModel(
+        id: kayitRef.id,
+        tutar: tutar,
+        tarih: DateTime.now(),
+        tur: 'borc',
+        fotoBekliyor: yerelFotoYolu != null,
+      ).toFirestore(),
+    );
 
-      final isletmeToplam = (isletmeSnap.data()!['toplam'] as num).toDouble();
-      final isToplam = (isSnap.data()!['toplam'] as num).toDouble();
-
-      tx.set(
-        kayitRef,
-        KayitModel(
-          id: kayitRef.id,
-          tutar: tutar,
-          tarih: DateTime.now(),
-          fotoBekliyor: yerelFotoYolu != null,
-        ).toFirestore(),
-      );
-
-      tx.update(isletmeRef, {'toplam': isletmeToplam + tutar});
-      tx.update(isRef, {'toplam': isToplam + tutar});
-    });
+    await isletmeRef.set(
+      {'toplam': FieldValue.increment(tutar)},
+      SetOptions(merge: true),
+    );
+    await isRef.set(
+      {'toplam': FieldValue.increment(tutar)},
+      SetOptions(merge: true),
+    );
 
     return KayitKimlikleri(isId: isId, isletmeId: isletmeId, kayitId: kayitRef.id);
   }
@@ -237,26 +228,23 @@ class FirestoreService {
     final isRef = _islerRef.doc(isId);
     final kayitRef = isletmeRef.collection('kayitlar').doc();
 
-    await _db.runTransaction((tx) async {
-      final isletmeSnap = await tx.get(isletmeRef);
-      final isSnap = await tx.get(isRef);
+    await kayitRef.set(
+      KayitModel(
+        id: kayitRef.id,
+        tutar: tutar,
+        tarih: DateTime.now(),
+        tur: 'odeme',
+      ).toFirestore(),
+    );
 
-      final isletmeToplam = (isletmeSnap.data()!['toplam'] as num).toDouble();
-      final isToplam = (isSnap.data()!['toplam'] as num).toDouble();
-
-      tx.set(
-        kayitRef,
-        KayitModel(
-          id: kayitRef.id,
-          tutar: tutar,
-          tarih: DateTime.now(),
-          tur: 'odeme',
-        ).toFirestore(),
-      );
-
-      tx.update(isletmeRef, {'toplam': isletmeToplam - tutar});
-      tx.update(isRef, {'toplam': isToplam - tutar});
-    });
+    await isletmeRef.set(
+      {'toplam': FieldValue.increment(-tutar)},
+      SetOptions(merge: true),
+    );
+    await isRef.set(
+      {'toplam': FieldValue.increment(-tutar)},
+      SetOptions(merge: true),
+    );
 
     return KayitKimlikleri(isId: isId, isletmeId: isletmeId, kayitId: kayitRef.id);
   }
@@ -280,16 +268,15 @@ class FirestoreService {
     final isRef = _islerRef.doc(isId);
     final kayitRef = isletmeRef.collection('kayitlar').doc(kayitId);
 
-    await _db.runTransaction((tx) async {
-      final isletmeSnap = await tx.get(isletmeRef);
-      final isSnap = await tx.get(isRef);
-      final isletmeToplam = (isletmeSnap.data()!['toplam'] as num).toDouble();
-      final isToplam = (isSnap.data()!['toplam'] as num).toDouble();
-
-      tx.update(kayitRef, {'tutar': yeniTutar});
-      tx.update(isletmeRef, {'toplam': isletmeToplam + fark});
-      tx.update(isRef, {'toplam': isToplam + fark});
-    });
+    await kayitRef.update({'tutar': yeniTutar});
+    await isletmeRef.set(
+      {'toplam': FieldValue.increment(fark)},
+      SetOptions(merge: true),
+    );
+    await isRef.set(
+      {'toplam': FieldValue.increment(fark)},
+      SetOptions(merge: true),
+    );
   }
 
   /// Bir kaydı siler; o kaydın işletme/iş toplamlarına yaptığı etkiyi geri
@@ -308,16 +295,15 @@ class FirestoreService {
     final isRef = _islerRef.doc(isId);
     final kayitRef = isletmeRef.collection('kayitlar').doc(kayitId);
 
-    await _db.runTransaction((tx) async {
-      final isletmeSnap = await tx.get(isletmeRef);
-      final isSnap = await tx.get(isRef);
-      final isletmeToplam = (isletmeSnap.data()!['toplam'] as num).toDouble();
-      final isToplam = (isSnap.data()!['toplam'] as num).toDouble();
-
-      tx.delete(kayitRef);
-      tx.update(isletmeRef, {'toplam': isletmeToplam + geriAl});
-      tx.update(isRef, {'toplam': isToplam + geriAl});
-    });
+    await kayitRef.delete();
+    await isletmeRef.set(
+      {'toplam': FieldValue.increment(geriAl)},
+      SetOptions(merge: true),
+    );
+    await isRef.set(
+      {'toplam': FieldValue.increment(geriAl)},
+      SetOptions(merge: true),
+    );
   }
 
   /// Fotoğraf yüklendikten sonra (bkz. PhotoUploadService) kaydın
@@ -339,6 +325,7 @@ class FirestoreService {
   /// Kaydın kendisi (tutar, tarih, işletme) HİÇ SİLİNMEZ — sadece görsel
   /// kaldırılır ve fotoUrl alanı boşaltılır. Uygulama açılışında bir kere
   /// çağrılması yeterli; sessizce çalışır, hata olursa yutar (kritik değil).
+  /// İnternet yoksa da hata vermez, sadece bir sonraki açılışta tekrar dener.
   Future<void> eskiFisleriTemizle() async {
     try {
       final esikTarih = DateTime.now().subtract(const Duration(days: 365));
@@ -346,7 +333,7 @@ class FirestoreService {
       final sorguSonucu = await _db
           .collectionGroup('kayitlar')
           .where('tarih', isLessThan: Timestamp.fromDate(esikTarih))
-          .get();
+          .get(const GetOptions(source: Source.server));
 
       for (final belge in sorguSonucu.docs) {
         final data = belge.data();
@@ -363,8 +350,9 @@ class FirestoreService {
         await belge.reference.update({'fotoUrl': null, 'fotoBekliyor': false});
       }
     } catch (e) {
-      // Bağlantı yoksa ya da gerekli Firestore index'i henüz oluşmadıysa
-      // sessizce vazgeç — bir sonraki açılışta tekrar denenecek.
+      // Bağlantı yoksa (Source.server zaten offline'da hemen hata verir)
+      // ya da gerekli Firestore index'i henüz oluşmadıysa sessizce vazgeç —
+      // bir sonraki açılışta, bağlantı varken tekrar denenecek.
     }
   }
 }
