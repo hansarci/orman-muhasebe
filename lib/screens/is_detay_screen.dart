@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/is_model.dart';
 import '../models/isletme_model.dart';
 import '../services/firestore_service.dart';
+import '../services/pdf_service.dart';
 import '../services/photo_upload_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/fis_foto_secici.dart';
@@ -36,6 +37,14 @@ class _IsDetayScreenState extends State<IsDetayScreen> {
   final _tutarController = TextEditingController();
   File? _secilenFoto;
   bool _kaydediliyor = false;
+  bool _pdfHazirlaniyor = false;
+  late final PdfService _pdfService;
+
+  @override
+  void initState() {
+    super.initState();
+    _pdfService = PdfService(widget.firestoreService);
+  }
 
   @override
   void dispose() {
@@ -46,7 +55,7 @@ class _IsDetayScreenState extends State<IsDetayScreen> {
 
   Future<void> _masrafEkle() async {
     final isletmeAdi = _isletmeAdiController.text.trim();
-    final tutar = double.tryParse(_tutarController.text.trim());
+    final tutar = tutarMetniniSayiyaCevir(_tutarController.text);
     if (isletmeAdi.isEmpty || tutar == null || tutar <= 0) return;
 
     setState(() => _kaydediliyor = true);
@@ -76,6 +85,25 @@ class _IsDetayScreenState extends State<IsDetayScreen> {
     }
   }
 
+  Future<void> _pdfPaylas(IsModel? is_) async {
+    if (is_ == null || _pdfHazirlaniyor) return;
+    setState(() => _pdfHazirlaniyor = true);
+    try {
+      await _pdfService.isiPdfOlarakPaylas(is_);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('PDF oluşturulamadı: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _pdfHazirlaniyor = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<IsModel>(
@@ -100,6 +128,19 @@ class _IsDetayScreenState extends State<IsDetayScreen> {
                 ),
               ],
             ),
+            actions: [
+              IconButton(
+                tooltip: 'PDF olarak paylaş',
+                onPressed: _pdfHazirlaniyor ? null : () => _pdfPaylas(is_),
+                icon: _pdfHazirlaniyor
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.picture_as_pdf_outlined),
+              ),
+            ],
           ),
           body: Padding(
             padding: const EdgeInsets.all(16),
@@ -120,7 +161,8 @@ class _IsDetayScreenState extends State<IsDetayScreen> {
                     Expanded(
                       child: TextField(
                         controller: _tutarController,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [BinlikAyraciFormatter()],
                         decoration: const InputDecoration(hintText: 'Tutar'),
                       ),
                     ),
