@@ -71,7 +71,7 @@ class _IsletmeDetayScreenState extends State<IsletmeDetayScreen> {
   }
 
   Future<void> _kayitEkle({required bool odemeMi}) async {
-    final tutar = double.tryParse(_tutarController.text.trim());
+    final tutar = tutarMetniniSayiyaCevir(_tutarController.text);
     if (tutar == null || tutar <= 0) return;
 
     setState(() => _kaydediliyor = true);
@@ -188,7 +188,8 @@ class _IsletmeDetayScreenState extends State<IsletmeDetayScreen> {
                         child: TextField(
                           controller: _tutarController,
                           textAlign: TextAlign.center,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [BinlikAyraciFormatter()],
                           decoration: const InputDecoration(hintText: 'Borç Tutarı'),
                         ),
                       ),
@@ -456,7 +457,7 @@ class _DuzenlenebilirKayitSatiriState extends State<_DuzenlenebilirKayitSatiri> 
   @override
   void initState() {
     super.initState();
-    _duzenleController = TextEditingController(text: widget.kayit.tutar.toStringAsFixed(0));
+    _duzenleController = TextEditingController(text: paraFormatla(widget.kayit.tutar));
   }
 
   @override
@@ -483,7 +484,8 @@ class _DuzenlenebilirKayitSatiriState extends State<_DuzenlenebilirKayitSatiri> 
                 controller: _duzenleController,
                 autofocus: true,
                 textAlign: TextAlign.center,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: TextInputType.number,
+                inputFormatters: [BinlikAyraciFormatter()],
                 style: const TextStyle(color: AppColors.yazi, fontSize: 13),
                 decoration: const InputDecoration(
                   isDense: true,
@@ -496,7 +498,7 @@ class _DuzenlenebilirKayitSatiriState extends State<_DuzenlenebilirKayitSatiri> 
             IconButton(
               icon: const Icon(Icons.check, color: AppColors.yesilTik, size: 20),
               onPressed: () {
-                final yeni = double.tryParse(_duzenleController.text.trim());
+                final yeni = tutarMetniniSayiyaCevir(_duzenleController.text);
                 if (yeni != null && yeni > 0) widget.onDuzenle(yeni);
                 setState(() => _duzenleniyor = false);
               },
