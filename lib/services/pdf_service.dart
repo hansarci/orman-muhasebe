@@ -125,7 +125,7 @@ class PdfService {
             pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text(is_.isim.toUpperCase(), style: pw.TextStyle(font: boldFont, fontSize: 20)),
+                pw.Text(_turkceBuyukHarf(is_.isim), style: pw.TextStyle(font: boldFont, fontSize: 20)),
                 pw.Text('Masraf Dökümü',
                     style: pw.TextStyle(font: regularFont, fontSize: 11, color: PdfColors.grey600)),
                 pw.SizedBox(height: 6),
@@ -320,5 +320,14 @@ class PdfService {
     return metin
         .replaceAll(RegExp(r'[^\w\sğüşıöçĞÜŞİÖÇ-]'), '')
         .replaceAll(' ', '_');
+  }
+
+  /// Dart'ın standart `toUpperCase()`'i Türkçe'ye uygun değil — "Eflani"
+  /// gibi kelimelerdeki noktalı küçük "i"yi yanlışlıkla noktasız "I" yapıp
+  /// "EFLANI" yerine "EFLANI" değil "EFLANİ" olması gerekirken "Efanı" gibi
+  /// bozuk sonuçlar üretebiliyor. Bu, uygulama ekranlarında kullanılan
+  /// turkceBuyukHarf() ile aynı düzeltmenin PDF tarafındaki karşılığı.
+  String _turkceBuyukHarf(String metin) {
+    return metin.replaceAll('i', 'İ').toUpperCase();
   }
 }
