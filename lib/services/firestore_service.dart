@@ -104,9 +104,19 @@ class FirestoreService {
   /// "İşi Başlat" panelindeki akışın karşılığı — sadece iş adıyla, hiç
   /// işletme/tutar olmadan boş bir iş açar. İşletmeler daha sonra iş
   /// detay ekranından tek tek eklenir. Oluşturulan işin ID'sini döndürür.
-  Future<String> bosIsOlustur({required String isAdi}) async {
+  ///
+  /// ÖNEMLİ — "gönder ve unut" (fire-and-forget): belge ID'si zaten
+  /// tamamen yerel olarak (ağa hiç değmeden) üretiliyor, bu yüzden onu
+  /// senkron döndürüyoruz. `.set()` yazma işlemini BEKLEMİYORUZ —
+  /// Firestore bunu kendi iç kuyruğuna alıp (internet olsun olmasın)
+  /// arka planda tamamlıyor. Böylece UI hiçbir zaman "yazma bitene kadar"
+  /// beklemek zorunda kalmıyor; sinyalsiz bir ormanda bile arayüz anında
+  /// tepki veriyor.
+  String bosIsOlustur({required String isAdi}) {
     final isRef = _islerRef.doc();
-    await isRef.set(
+    // Bilerek await YOK — arka planda çalışsın.
+    // ignore: unawaited_futures
+    isRef.set(
       IsModel(
         id: isRef.id,
         isim: isAdi,
@@ -130,21 +140,25 @@ class FirestoreService {
   }
 
   /// Bir işin altına yeni bir masraf kaydı ekler. İşletme daha önce yoksa
-  /// otomatik oluşturulur (merge:true + increment sayesinde tek yazımda),
-  /// varsa toplamı artırılır. İnternet olmadan da çalışır: yazım önce
-  /// yerel önbelleğe alınır, bağlantı gelince sunucuya senkronize olur.
-  Future<KayitKimlikleri> isletmeyeKayitEkle({
+  /// otomatik oluşturulur, varsa toplamı artırılır.
+  ///
+  /// "Gönder ve unut": tüm ID'ler yerel olarak (ağa değmeden) üretiliyor,
+  /// bu yüzden fonksiyon senkron dönüyor. Üç yazma işlemi de (`.set()`)
+  /// BEKLENMİYOR — Firestore'un kendi kuyruğuna bırakılıyor, arka planda
+  /// (internet olsun olmasın) tamamlanıyor. UI hiçbir zaman askıda kalmıyor.
+  KayitKimlikleri isletmeyeKayitEkle({
     required String isId,
     required String isletmeAdi,
     required double tutar,
     String? yerelFotoYolu,
-  }) async {
+  }) {
     final isletmeId = _slug(isletmeAdi);
     final isletmeRef = _isletmelerRef(isId).doc(isletmeId);
     final isRef = _islerRef.doc(isId);
     final kayitRef = isletmeRef.collection('kayitlar').doc();
 
-    await isletmeRef.set(
+    // ignore: unawaited_futures
+    isletmeRef.set(
       {
         'isim': isletmeAdi,
         'toplam': FieldValue.increment(tutar),
@@ -152,7 +166,8 @@ class FirestoreService {
       SetOptions(merge: true),
     );
 
-    await kayitRef.set(
+    // ignore: unawaited_futures
+    kayitRef.set(
       KayitModel(
         id: kayitRef.id,
         tutar: tutar,
@@ -162,7 +177,8 @@ class FirestoreService {
       ).toFirestore(),
     );
 
-    await isRef.set(
+    // ignore: unawaited_futures
+    isRef.set(
       {'toplam': FieldValue.increment(tutar)},
       SetOptions(merge: true),
     );
@@ -184,18 +200,19 @@ class FirestoreService {
   }
 
   /// Zaten bilinen bir işletmeye (işletme detay ekranındaki "Borç ekle")
-  /// yeni bir kayıt ekler.
-  Future<KayitKimlikleri> borcEkle({
+  /// yeni bir kayıt ekler. Gönder-ve-unut mantığı yukarıdakiyle aynı.
+  KayitKimlikleri borcEkle({
     required String isId,
     required String isletmeId,
     required double tutar,
     String? yerelFotoYolu,
-  }) async {
+  }) {
     final isletmeRef = _isletmelerRef(isId).doc(isletmeId);
     final isRef = _islerRef.doc(isId);
     final kayitRef = isletmeRef.collection('kayitlar').doc();
 
-    await kayitRef.set(
+    // ignore: unawaited_futures
+    kayitRef.set(
       KayitModel(
         id: kayitRef.id,
         tutar: tutar,
@@ -205,11 +222,13 @@ class FirestoreService {
       ).toFirestore(),
     );
 
-    await isletmeRef.set(
+    // ignore: unawaited_futures
+    isletmeRef.set(
       {'toplam': FieldValue.increment(tutar)},
       SetOptions(merge: true),
     );
-    await isRef.set(
+    // ignore: unawaited_futures
+    isRef.set(
       {'toplam': FieldValue.increment(tutar)},
       SetOptions(merge: true),
     );
@@ -218,17 +237,18 @@ class FirestoreService {
   }
 
   /// İşletme detayındaki "Ödeme Yap" — borcEkle'nin tersi: toplamı ARTIRMAK
-  /// yerine DÜŞÜRÜR, kaydı tur:'odeme' olarak işaretler.
-  Future<KayitKimlikleri> odemeEkle({
+  /// yerine DÜŞÜRÜR, kaydı tur:'odeme' olarak işaretler. Gönder-ve-unut.
+  KayitKimlikleri odemeEkle({
     required String isId,
     required String isletmeId,
     required double tutar,
-  }) async {
+  }) {
     final isletmeRef = _isletmelerRef(isId).doc(isletmeId);
     final isRef = _islerRef.doc(isId);
     final kayitRef = isletmeRef.collection('kayitlar').doc();
 
-    await kayitRef.set(
+    // ignore: unawaited_futures
+    kayitRef.set(
       KayitModel(
         id: kayitRef.id,
         tutar: tutar,
@@ -237,11 +257,13 @@ class FirestoreService {
       ).toFirestore(),
     );
 
-    await isletmeRef.set(
+    // ignore: unawaited_futures
+    isletmeRef.set(
       {'toplam': FieldValue.increment(-tutar)},
       SetOptions(merge: true),
     );
-    await isRef.set(
+    // ignore: unawaited_futures
+    isRef.set(
       {'toplam': FieldValue.increment(-tutar)},
       SetOptions(merge: true),
     );
