@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'screens/arsiv_screen.dart';
@@ -26,6 +27,16 @@ Future<void> main() async {
       // firebase_options.dart dosyasındaki DefaultFirebaseOptions.currentPlatform
       // değerini buraya verin:
       // options: DefaultFirebaseOptions.currentPlatform,
+    );
+
+    // ÖNEMLİ — internet olmadan çalışma (offline-first) için Firestore'a
+    // AÇIKÇA talimat veriyoruz. Varsayılan ayarlara güvenmek yerine burada
+    // net olarak belirtiyoruz: yerel önbelleği kullan, boyutunu sınırlama.
+    // Bu satır, `Firebase.initializeApp()` başarılı olduktan sonra ama
+    // Firestore ilk kez kullanılmadan ÖNCE çalışmalı.
+    FirebaseFirestore.instance.settings = const Settings(
+      persistenceEnabled: true,
+      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
     );
   } catch (e) {
     firebaseHazir = false;
