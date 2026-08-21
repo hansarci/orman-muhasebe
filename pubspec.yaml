@@ -40,6 +40,10 @@ dependencies:
   # Firebase Storage'dan gelen fiş fotoğraflarını önbellekleyerek gösterme
   cached_network_image: ^3.4.1
 
+  # İş dökümünü PDF olarak oluşturup paylaşma (WhatsApp/e-posta)
+  pdf: ^3.11.1
+  printing: ^5.13.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -49,3 +53,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/fonts/Roboto-Regular.ttf
+    - assets/fonts/Roboto-Bold.ttf
