@@ -49,7 +49,6 @@ class _IsletmeDetayScreenState extends State<IsletmeDetayScreen> {
     'Fişli Borçlar',
     'Fişsiz Borçlar',
     'Ödenenler',
-    'Ödenmeyenler',
   ];
 
   List<KayitModel> _filtrele(List<KayitModel> kayitlar) {
@@ -60,8 +59,6 @@ class _IsletmeDetayScreenState extends State<IsletmeDetayScreen> {
         return kayitlar.where((k) => !k.odemeMi && k.fotoUrl == null).toList();
       case 'Ödenenler':
         return kayitlar.where((k) => k.odemeMi).toList();
-      case 'Ödenmeyenler':
-        return kayitlar.where((k) => !k.odemeMi).toList();
       default:
         return kayitlar;
     }
@@ -120,8 +117,36 @@ class _IsletmeDetayScreenState extends State<IsletmeDetayScreen> {
             (isletmeListSnap.data ?? []).where((e) => e.id == widget.isletmeId);
         final isletme = eslesenler.isEmpty ? null : eslesenler.first;
 
-        return Scaffold(
-          body: GestureDetector(
+        // Toplamı işletme belgesindeki "toplam" alanından DEĞİL, geçmiş
+        // kayıtların kendisinden hesaplıyoruz. Sebep: offline'da yeni
+        // oluşturulan bir işletmenin "toplam" alanı bazen hemen optimistik
+        // güncellenmeyebiliyor, ama kayıt listesi (StreamBuilder altında)
+        // her zaman anında ve doğru güncelleniyor — o yüzden tek gerçek
+        // kaynak (source of truth) olarak listeyi kullanıyoruz.
+        return StreamBuilder<List<KayitModel>>(
+          stream: widget.firestoreService.kayitlarStream(widget.isId, widget.isletmeId),
+          builder: (context, kayitSnap) {
+            final tumKayitlar = kayitSnap.data ?? [];
+            final hesaplananToplam = tumKayitlar.fold<double>(
+              0,
+              (toplam, k) => toplam + (k.odemeMi ? -k.tutar : k.tutar),
+            );
+
+            return _govdeyiOlustur(context, isletme, tumKayitlar, hesaplananToplam);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _govdeyiOlustur(
+    BuildContext context,
+    IsletmeModel? isletme,
+    List<KayitModel> tumKayitlar,
+    double hesaplananToplam,
+  ) {
+    return Scaffold(
+      body: GestureDetector(
             behavior: HitTestBehavior.translucent,
             onTap: () {
               if (_seciliKayitId != null) setState(() => _seciliKayitId = null);
@@ -154,7 +179,7 @@ class _IsletmeDetayScreenState extends State<IsletmeDetayScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  ToplamSatiri(etiket: 'Toplam borç', tutar: isletme?.toplam ?? 0),
+                  ToplamSatiri(etiket: 'Toplam borç', tutar: hesaplananToplam),
 
                   // Tutar kutusu + kamera aynı satırda
                   Row(
@@ -268,10 +293,9 @@ class _IsletmeDetayScreenState extends State<IsletmeDetayScreen> {
                   ),
                   const SizedBox(height: 10),
                   Expanded(
-                    child: StreamBuilder<List<KayitModel>>(
-                      stream: widget.firestoreService.kayitlarStream(widget.isId, widget.isletmeId),
-                      builder: (context, snapshot) {
-                        final kayitlar = _filtrele(snapshot.data ?? []);
+                    child: Builder(
+                      builder: (context) {
+                        final kayitlar = _filtrele(tumKayitlar);
                         if (kayitlar.isEmpty) {
                           return Center(
                             child: Text(
@@ -314,10 +338,8 @@ class _IsletmeDetayScreenState extends State<IsletmeDetayScreen> {
               ),
             ),
           ),
-          ),
-        );
-      },
-    );
+        ),
+      );
   }
 }
 
