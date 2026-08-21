@@ -55,9 +55,7 @@ class _YeniIsPaneliState extends State<_YeniIsPaneli> {
     setState(() => _kaydediliyor = true);
 
     try {
-      final isId = await widget.firestoreService
-          .bosIsOlustur(isAdi: isAdi)
-          .timeout(const Duration(seconds: 15));
+      final isId = await widget.firestoreService.bosIsOlustur(isAdi: isAdi);
 
       if (!mounted) return;
       Navigator.of(context).pop(); // Paneli kapat.
