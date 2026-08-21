@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 
@@ -92,6 +93,38 @@ String paraFormatla(double tutar) => _paraFormat.format(tutar);
 /// harfe çevirirken bunun yerine bu fonksiyon kullanılmalı.
 String turkceBuyukHarf(String metin) {
   return metin.replaceAll('i', 'İ').toUpperCase();
+}
+
+/// Tutar kutularına yazarken otomatik binlik nokta koyar: "400000" yazınca
+/// anında "400.000" gösterir — kullanıcının sıfırları saymasına gerek
+/// kalmaz. Kuruş/ondalık desteklemez, sadece tam sayı (Türk Lirası'nda
+/// pratikte yeterli).
+class BinlikAyraciFormatter extends TextInputFormatter {
+  static final _format = NumberFormat.decimalPattern('tr_TR');
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final rakamlar = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (rakamlar.isEmpty) {
+      return newValue.copyWith(text: '');
+    }
+    final yeniMetin = _format.format(int.parse(rakamlar));
+    return TextEditingValue(
+      text: yeniMetin,
+      selection: TextSelection.collapsed(offset: yeniMetin.length),
+    );
+  }
+}
+
+/// BinlikAyraciFormatter ile noktalı gösterilen bir tutar metnini
+/// ("400.000" gibi) gerçek sayıya çevirir. Tutar kutularından değer
+/// okurken her zaman double.tryParse yerine bu kullanılmalı.
+double? tutarMetniniSayiyaCevir(String metin) {
+  final temiz = metin.replaceAll('.', '').replaceAll(',', '.').trim();
+  return double.tryParse(temiz);
 }
 
 /// İşletme detayındaki "Geçmiş Kayıtlar" listesinin tek satırı.
