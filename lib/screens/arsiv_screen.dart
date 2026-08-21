@@ -51,7 +51,8 @@ class _ArsivScreenState extends State<ArsivScreen> {
         content: TextField(
           controller: controller,
           autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          keyboardType: TextInputType.number,
+          inputFormatters: [BinlikAyraciFormatter()],
           style: const TextStyle(color: AppColors.yazi),
           decoration: const InputDecoration(hintText: 'Kazanılan Para (₺)'),
         ),
@@ -62,7 +63,7 @@ class _ArsivScreenState extends State<ArsivScreen> {
           ),
           TextButton(
             onPressed: () {
-              final deger = double.tryParse(controller.text.trim());
+              final deger = tutarMetniniSayiyaCevir(controller.text);
               Navigator.of(context).pop(deger);
             },
             child: const Text('Kaydet', style: TextStyle(color: AppColors.yesilTik)),
