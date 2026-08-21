@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import '../models/gelir_model.dart';
 import '../models/is_model.dart';
 import '../models/isletme_model.dart';
 import '../models/kayit_model.dart';
@@ -137,6 +138,24 @@ class FirestoreService {
         .orderBy('isim')
         .snapshots()
         .map((snap) => snap.docs.map(IsletmeModel.fromFirestore).toList());
+  }
+
+  /// PDF oluşturma gibi tek seferlik ihtiyaçlar için: bir işin altındaki
+  /// işletmeleri, canlı dinlemeden, bir kerelik (anlık görüntü) çeker.
+  Future<List<IsletmeModel>> isletmeleriGetir(String isId) async {
+    final snap = await _isletmelerRef(isId).orderBy('isim').get();
+    return snap.docs.map(IsletmeModel.fromFirestore).toList();
+  }
+
+  /// PDF oluşturma gibi tek seferlik ihtiyaçlar için: bir işletmenin
+  /// kayıtlarını, canlı dinlemeden, bir kerelik (anlık görüntü) çeker.
+  Future<List<KayitModel>> kayitlariGetir(String isId, String isletmeId) async {
+    final snap = await _isletmelerRef(isId)
+        .doc(isletmeId)
+        .collection('kayitlar')
+        .orderBy('tarih', descending: true)
+        .get();
+    return snap.docs.map(KayitModel.fromFirestore).toList();
   }
 
   /// Bir işin altına yeni bir masraf kaydı ekler. İşletme daha önce yoksa
@@ -376,5 +395,42 @@ class FirestoreService {
       // ya da gerekli Firestore index'i henüz oluşmadıysa sessizce vazgeç —
       // bir sonraki açılışta, bağlantı varken tekrar denenecek.
     }
+  }
+
+  // ---------------------------------------------------------------------
+  // Gelir (kazanç) — Arşivdeki iş satırına uzun basınca "Kazanç ekle"
+  // ---------------------------------------------------------------------
+
+  CollectionReference<Map<String, dynamic>> _gelirlerRef(String isId) =>
+      _islerRef.doc(isId).collection('gelirler');
+
+  /// Bir işe yeni bir kazanç (gelir) kaydı ekler. Borç/ödeme kayıtlarıyla
+  /// aynı mantık: her giriş ayrı, tarihli bir belge — tek bir toplam alanı
+  /// DEĞİL, PDF ve ekranlar toplamı her zaman bu kayıtların kendisinden
+  /// hesaplıyor (offline'da güvenilir olsun diye).
+  ///
+  /// "Gönder ve unut": ID yerel üretiliyor, yazma beklenmiyor.
+  String gelirEkle({required String isId, required double tutar}) {
+    final gelirRef = _gelirlerRef(isId).doc();
+    // ignore: unawaited_futures
+    gelirRef.set(
+      GelirModel(id: gelirRef.id, tutar: tutar, tarih: DateTime.now()).toFirestore(),
+    );
+    return gelirRef.id;
+  }
+
+  /// Bir işin kazanç kayıtlarını canlı olarak dinler (en yeni en üstte).
+  Stream<List<GelirModel>> gelirlerStream(String isId) {
+    return _gelirlerRef(isId)
+        .orderBy('tarih', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs.map(GelirModel.fromFirestore).toList());
+  }
+
+  /// PDF oluşturma gibi tek seferlik ihtiyaçlar için: bir işin kazanç
+  /// kayıtlarını, canlı dinlemeden, bir kerelik (anlık görüntü) çeker.
+  Future<List<GelirModel>> gelirleriGetir(String isId) async {
+    final snap = await _gelirlerRef(isId).orderBy('tarih', descending: true).get();
+    return snap.docs.map(GelirModel.fromFirestore).toList();
   }
 }
