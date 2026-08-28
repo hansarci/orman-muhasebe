@@ -522,6 +522,19 @@ class FirestoreService {
     );
   }
 
+  /// Bir işçiyi ve tüm hareket kayıtlarını komple siler. Tamamen ödenmiş
+  /// (kazanç sıfırlanmış) ve PDF'i gönderilmiş bir işçiyi listeden
+  /// otomatik kaldırmak için kullanılıyor. Geri dönüşü yok, bu yüzden
+  /// beklenip (fire-and-forget DEĞİL) her adımın tamamlandığından
+  /// emin olunuyor.
+  Future<void> isciSil(String isciId) async {
+    final kayitlarSnap = await _isciKayitlarRef(isciId).get();
+    for (final kayitDoc in kayitlarSnap.docs) {
+      await kayitDoc.reference.delete();
+    }
+    await _iscilerRef.doc(isciId).delete();
+  }
+
   // ---------------------------------------------------------------------
   // Profil paneli — İstatistikler ve Hesabı Sil
   // ---------------------------------------------------------------------
