@@ -87,6 +87,35 @@ class _IscilerPaneliState extends State<IscilerPaneli> {
     );
   }
 
+  Future<void> _gecmisKayitOzelliginiGizlemeyiSor() async {
+    final onay = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.panel,
+        title: const Text('Geçmiş Kayıt Ekle\'yi Gizle', style: TextStyle(color: AppColors.yazi)),
+        content: const Text(
+          'Bu, eski işçi kayıtlarını uygulamaya bir kereye mahsus aktarman '
+          'için hazırlanmıştı. Tüm geçmiş verilerini eklediysen, bu '
+          'butonu kalıcı olarak gizleyebilirsin.',
+          style: TextStyle(color: AppColors.yaziSoluk),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Vazgeç'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Evet, Gizle', style: TextStyle(color: AppColors.yesilTik)),
+          ),
+        ],
+      ),
+    );
+    if (onay == true) {
+      await widget.firestoreService.gecmisKayitOzelliginiGizle();
+    }
+  }
+
   Future<void> _isciGeldiMiSor(IsciModel isci) async {
     final geldi = await showDialog<bool>(
       context: context,
@@ -124,66 +153,105 @@ class _IscilerPaneliState extends State<IscilerPaneli> {
 
   Future<void> _odemeYapPenceresiniAc(IsciModel isci) async {
     final tutarController = TextEditingController();
+    DateTime seciliTarih = DateTime.now();
 
     await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.panel,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: AppColors.turuncu, width: 2),
-        ),
-        title: Text('${isci.isim} — Ödeme Yap', style: const TextStyle(color: AppColors.yazi)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            RichText(
-              text: TextSpan(
-                style: const TextStyle(color: AppColors.yaziSoluk, fontSize: 13),
-                children: [
-                  const TextSpan(text: 'Ödenmemiş kazanç: '),
-                  TextSpan(
-                    text: '₺${paraFormatla(isci.kazanc)}',
-                    style: const TextStyle(
-                      fontFamily: 'Oswald',
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.yesilTik,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.panel,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: const BorderSide(color: AppColors.turuncu, width: 2),
+          ),
+          title: Text('${isci.isim} — Ödeme Yap', style: const TextStyle(color: AppColors.yazi)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              RichText(
+                text: TextSpan(
+                  style: const TextStyle(color: AppColors.yaziSoluk, fontSize: 13),
+                  children: [
+                    const TextSpan(text: 'Ödenmemiş kazanç: '),
+                    TextSpan(
+                      text: '₺${paraFormatla(isci.kazanc)}',
+                      style: const TextStyle(
+                        fontFamily: 'Oswald',
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.yesilTik,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: tutarController,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                inputFormatters: [BinlikAyraciFormatter()],
+                style: const TextStyle(color: AppColors.yazi),
+                decoration: const InputDecoration(hintText: 'Ödenecek Tutar'),
+              ),
+              const SizedBox(height: 12),
+              InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () async {
+                  final secilen = await showDatePicker(
+                    context: context,
+                    initialDate: seciliTarih,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime.now(),
+                    helpText: 'Ödeme Tarihi',
+                    cancelText: 'Vazgeç',
+                    confirmText: 'Seç',
+                  );
+                  if (secilen != null) {
+                    setDialogState(() => seciliTarih = secilen);
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: AppColors.cizgi),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_today_outlined, size: 15, color: AppColors.turuncu),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Ödeme Tarihi: ${tarihFormatla(seciliTarih)}',
+                        style: const TextStyle(color: AppColors.yazi, fontSize: 12.5),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Vazgeç'),
             ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: tutarController,
-              autofocus: true,
-              keyboardType: TextInputType.number,
-              inputFormatters: [BinlikAyraciFormatter()],
-              style: const TextStyle(color: AppColors.yazi),
-              decoration: const InputDecoration(hintText: 'Ödenecek Tutar'),
+            TextButton(
+              onPressed: () {
+                final tutar = tutarMetniniSayiyaCevir(tutarController.text);
+                if (tutar == null || tutar <= 0) return;
+                widget.firestoreService.isciKayitEkle(
+                  isciId: isci.id,
+                  tutar: tutar,
+                  tur: 'odeme',
+                  tarih: seciliTarih,
+                );
+                Navigator.of(context).pop();
+              },
+              child: const Text('Ödemeyi Kaydet', style: TextStyle(color: AppColors.yesilTik)),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Vazgeç'),
-          ),
-          TextButton(
-            onPressed: () {
-              final tutar = tutarMetniniSayiyaCevir(tutarController.text);
-              if (tutar == null || tutar <= 0) return;
-              widget.firestoreService.isciKayitEkle(
-                isciId: isci.id,
-                tutar: tutar,
-                tur: 'odeme',
-              );
-              Navigator.of(context).pop();
-            },
-            child: const Text('Ödemeyi Kaydet', style: TextStyle(color: AppColors.yesilTik)),
-          ),
-        ],
       ),
     );
   }
@@ -252,19 +320,39 @@ class _IscilerPaneliState extends State<IscilerPaneli> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                Center(
-                  child: OutlinedButton(
-                    onPressed: _gecmisKayitEkraninaGit,
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.yaziSoluk),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    ),
-                    child: const Text(
-                      '🕓 Geçmiş Kayıt Ekle',
-                      style: TextStyle(color: AppColors.yaziSoluk, fontSize: 11.5),
-                    ),
-                  ),
+                StreamBuilder<bool>(
+                  stream: widget.firestoreService.gecmisKayitGizliMi(),
+                  builder: (context, snapshot) {
+                    if (snapshot.data == true) return const SizedBox.shrink();
+                    return Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          OutlinedButton(
+                            onPressed: _gecmisKayitEkraninaGit,
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: AppColors.yaziSoluk),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            ),
+                            child: const Text(
+                              '🕓 Geçmiş Kayıt Ekle',
+                              style: TextStyle(color: AppColors.yaziSoluk, fontSize: 11.5),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: _gecmisKayitOzelliginiGizlemeyiSor,
+                            child: const Padding(
+                              padding: EdgeInsets.all(4),
+                              child: Icon(Icons.close, size: 15, color: AppColors.yaziSoluk),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 16),
