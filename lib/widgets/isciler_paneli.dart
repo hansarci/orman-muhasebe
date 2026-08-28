@@ -54,7 +54,7 @@ class _IscilerPaneliState extends State<IscilerPaneli> {
               keyboardType: TextInputType.number,
               inputFormatters: [BinlikAyraciFormatter()],
               style: const TextStyle(color: AppColors.yazi),
-              decoration: const InputDecoration(hintText: 'Ücret'),
+              decoration: const InputDecoration(hintText: 'Günlük Ücreti'),
             ),
           ],
         ),
@@ -196,6 +196,20 @@ class _IscilerPaneliState extends State<IscilerPaneli> {
     });
     try {
       await _pdfService.isciyiPdfOlarakPaylas(isci);
+
+      // Tamamen ödenmiş (kazanç sıfırlanmış) bir işçinin PDF'i
+      // gönderildikten sonra, listeden otomatik kaldırılır.
+      if (isci.kazanc <= 0) {
+        await widget.firestoreService.isciSil(isci.id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${isci.isim} tamamen ödendi, listeden kaldırıldı.'),
+              backgroundColor: AppColors.yesilTik,
+            ),
+          );
+        }
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
