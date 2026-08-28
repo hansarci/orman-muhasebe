@@ -1,8 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Bir işin (iş sahasının) altındaki işletme/kişi (ör. Motorcu, Benzinlik).
-///
-/// Firestore yolu: isler/{isId}/isletmeler/{isletmeId}
+/// Bir işin altındaki bir işletmeyi (ör. "Motorcu") temsil eden model.
+/// ID'si, işletme adından türetilen bir "slug" (bkz. FirestoreService._slug).
 class IsletmeModel {
   final String id;
   final String isim;
@@ -18,15 +17,8 @@ class IsletmeModel {
     final data = doc.data()!;
     return IsletmeModel(
       id: doc.id,
-      isim: data['isim'] as String,
-      toplam: (data['toplam'] as num).toDouble(),
+      isim: data['isim'] as String? ?? '',
+      toplam: (data['toplam'] as num?)?.toDouble() ?? 0,
     );
-  }
-
-  Map<String, dynamic> toFirestore() {
-    return {
-      'isim': isim,
-      'toplam': toplam,
-    };
   }
 }
