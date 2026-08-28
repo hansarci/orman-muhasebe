@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// Bir işletmeye ait tek bir kayıt — borç ('borc') veya ödeme ('odeme').
 /// Ödeme kayıtları toplamdan DÜŞER, borç kayıtları toplama EKLENİR.
 ///
-/// Firestore yolu: isler/{isId}/isletmeler/{isletmeId}/kayitlar/{kayitId}
+/// Firestore yolu: kullanicilar/{uid}/isler/{isId}/isletmeler/{isletmeId}/kayitlar/{kayitId}
 class KayitModel {
   final String id;
   final double tutar;
