@@ -1,11 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Bir işin kazandığı geliri temsil eden tek bir kayıt (tarih + tutar).
-/// "Kazanç ekle" ile eklenen her giriş ayrı bir belge olarak tutulur —
-/// böylece PDF'te tarih tarih dökülebilir ve toplamı her zaman kayıtların
-/// kendisinden hesaplanabilir (offline'da da güvenilir olsun diye).
+/// "Kazanç ekle" ile eklenen her giriş ayrı bir belge olarak tutulur.
 ///
-/// Firestore yolu: isler/{isId}/gelirler/{gelirId}
+/// Firestore yolu: kullanicilar/{uid}/isler/{isId}/gelirler/{gelirId}
 class GelirModel {
   final String id;
   final double tutar;
