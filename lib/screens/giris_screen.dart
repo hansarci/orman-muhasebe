@@ -127,12 +127,14 @@ class _GirisScreenState extends State<GirisScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 ClipRRect(
@@ -234,6 +236,19 @@ class _GirisScreenState extends State<GirisScreen> {
             ),
           ),
         ),
+      ),
+          Positioned(
+            left: 16,
+            bottom: 14,
+            child: Opacity(
+              opacity: 0.6,
+              child: Text(
+                'Created: Turhan Sarıcı',
+                style: TextStyle(fontSize: 11, color: AppColors.yaziSoluk),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
