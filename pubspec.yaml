@@ -1,40 +1,36 @@
 name: orman_muhasebe
-description: Orman işi masraf ve borç-alacak takip uygulaması.
+description: Orman işi masraf/borç takip uygulaması.
 publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.3.0 <4.0.0'
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
 
-  cupertino_icons: ^1.0.6
-
   # Firebase
   firebase_core: ^3.6.0
   cloud_firestore: ^5.4.4
   firebase_storage: ^12.3.4
+  firebase_auth: ^5.3.1
 
-  # Fotoğraf çekme / seçme
-  image_picker: ^1.1.2
-
-  # Bağlantı durumu (offline fiş yükleme kuyruğu için)
-  connectivity_plus: ^6.1.0
-
-  # Yerel bekleyen-yükleme kuyruğu (offline fiş desteği)
+  # Yerel depolama (fotoğraf yükleme kuyruğu)
   hive: ^2.2.3
   hive_flutter: ^1.1.0
   path_provider: ^2.1.4
 
-  # Tarih formatlama (tr_TR)
+  # Ağ durumu / bağlantı değişikliklerini dinleme
+  connectivity_plus: ^6.0.5
+
+  # Kamera / galeriden fotoğraf seçme
+  image_picker: ^1.1.2
+
+  # Tarih/para biçimlendirme
   intl: ^0.19.0
 
-  # Benzersiz kimlik üretimi (yerel kayıtlar için)
-  uuid: ^4.5.1
-
-  # Web mockup'taki Oswald / Fraunces fontları (indirme gerektirmez)
+  # Yazı tipleri (Oswald, Fraunces)
   google_fonts: ^6.2.1
 
   # Firebase Storage'dan gelen fiş fotoğraflarını önbellekleyerek gösterme
@@ -56,3 +52,4 @@ flutter:
   assets:
     - assets/fonts/Roboto-Regular.ttf
     - assets/fonts/Roboto-Bold.ttf
+    - assets/images/logo.png
