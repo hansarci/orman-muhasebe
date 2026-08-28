@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../models/gelir_model.dart';
 import '../models/is_model.dart';
+import '../models/isci_kayit_model.dart';
+import '../models/isci_model.dart';
 import '../models/isletme_model.dart';
 import '../models/kayit_model.dart';
 
@@ -63,6 +65,12 @@ class FirestoreService {
 
   CollectionReference<Map<String, dynamic>> _gelirlerRef(String isId) =>
       _islerRef.doc(isId).collection('gelirler');
+
+  CollectionReference<Map<String, dynamic>> get _iscilerRef =>
+      _db.collection('kullanicilar').doc(_uid).collection('iscilerdb');
+
+  CollectionReference<Map<String, dynamic>> _isciKayitlarRef(String isciId) =>
+      _iscilerRef.doc(isciId).collection('kayitlar');
 
   /// "Motorcu " -> "motorcu", "Kara Çam Yolu" -> "kara-cam-yolu" gibi basit
   /// bir slug üretir. Türkçe karakterleri sadeleştirir.
@@ -434,59 +442,181 @@ class FirestoreService {
   }
 
   // ---------------------------------------------------------------------
-  // TEK SEFERLİK GÖÇ ARACI
+  // İşçiler
   // ---------------------------------------------------------------------
 
-  /// Kullanıcı girişi (auth) eklenmeden ÖNCE, kök dizinde ("isler/...")
-  /// duran eski paylaşımlı verileri, giriş yapan kullanıcının kendi
-  /// alanına ("kullanicilar/{uid}/isler/...") kopyalar. Mevcut kayıtların
-  /// ID'leri korunur, hiçbir şey yeniden numaralandırılmaz.
-  ///
-  /// Kopyalama bitince ESKİ VERİ SİLİNMEZ — bilerek. İstersen taşımanın
-  /// doğru gittiğini gördükten sonra Firebase Console'dan elle silersin.
-  /// Bu metodun çalışabilmesi için Firestore kurallarında eski "isler"
-  /// kök koleksiyonuna GEÇİCİ bir okuma izni açılmış olması gerekir.
-  Future<int> eskiVerileriAktar() async {
-    final eskiIslerRef = _db.collection('isler');
-    final eskiIslerSnap = await eskiIslerRef.get();
+  /// İşçi listesini canlı olarak dinler (isme göre sıralı).
+  Stream<List<IsciModel>> iscilerStream() {
+    return _iscilerRef
+        .orderBy('isim')
+        .snapshots()
+        .map((snap) => snap.docs.map(IsciModel.fromFirestore).toList());
+  }
 
-    var aktarilanIsSayisi = 0;
+  /// Yeni bir işçi ekler. "Gönder ve unut": ID yerel üretiliyor, yazma
+  /// beklenmiyor — arayüz anında devam ediyor.
+  String isciEkle({required String isim, required double gunlukUcret}) {
+    final isciRef = _iscilerRef.doc();
+    // ignore: unawaited_futures
+    isciRef.set({
+      'isim': isim,
+      'gunlukUcret': gunlukUcret,
+      'kazanc': 0,
+    });
+    return isciRef.id;
+  }
 
-    for (final isDoc in eskiIslerSnap.docs) {
+  /// Aynı isimde işçi var mı diye bakar (Geçmiş Kayıt Ekle'de "yeni mi,
+  /// var olana mı ekleniyor" ayrımı için). Tek seferlik bir sorgu.
+  Future<IsciModel?> isciIsimleBul(String isim) async {
+    final snap = await _iscilerRef.get();
+    final eslesenler = snap.docs.map(IsciModel.fromFirestore).where(
+          (i) => i.isim.trim().toLowerCase() == isim.trim().toLowerCase(),
+        );
+    return eslesenler.isEmpty ? null : eslesenler.first;
+  }
+
+  /// Bir işçinin geçmiş (borç/ödeme tarzı) hareket kayıtlarını canlı dinler.
+  Stream<List<IsciKayitModel>> isciKayitlarStream(String isciId) {
+    return _isciKayitlarRef(isciId)
+        .orderBy('tarih', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs.map(IsciKayitModel.fromFirestore).toList());
+  }
+
+  /// PDF oluşturma gibi tek seferlik ihtiyaçlar için: bir işçinin
+  /// kayıtlarını, canlı dinlemeden, bir kerelik (anlık görüntü) çeker.
+  Future<List<IsciKayitModel>> isciKayitlariGetir(String isciId) async {
+    final snap = await _isciKayitlarRef(isciId).orderBy('tarih', descending: true).get();
+    return snap.docs.map(IsciKayitModel.fromFirestore).toList();
+  }
+
+  /// Bir işçiye tek bir günlük kayıt ekler — 'gelis' ise kazancı ARTIRIR,
+  /// 'odeme' ise AZALTIR. "Gönder ve unut": yazmalar beklenmiyor.
+  /// [tarih] verilmezse bugünün tarihi kullanılır (Geçmiş Kayıt Ekle'de
+  /// geçmiş bir tarih verilir).
+  void isciKayitEkle({
+    required String isciId,
+    required double tutar,
+    required String tur,
+    DateTime? tarih,
+  }) {
+    final isciRef = _iscilerRef.doc(isciId);
+    final kayitRef = _isciKayitlarRef(isciId).doc();
+    final etki = tur == 'odeme' ? -1 : 1;
+
+    // ignore: unawaited_futures
+    kayitRef.set(
+      IsciKayitModel(
+        id: kayitRef.id,
+        tarih: tarih ?? DateTime.now(),
+        tutar: tutar,
+        tur: tur,
+      ).toFirestore(),
+    );
+
+    // ignore: unawaited_futures
+    isciRef.set(
+      {'kazanc': FieldValue.increment(tutar * etki)},
+      SetOptions(merge: true),
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // Profil paneli — İstatistikler ve Hesabı Sil
+  // ---------------------------------------------------------------------
+
+  /// Profil panelindeki "İstatistikler" penceresi için: kullanıcının TÜM
+  /// işleri üzerinden toplam kazanç, toplam masraf ve kârı hesaplar.
+  /// Dönen map anahtarları: 'kazanc', 'masraf', 'kar'.
+  Future<Map<String, double>> tumZamanIstatistikleriGetir() async {
+    final islerSnap = await _islerRef.get();
+
+    double toplamKazanc = 0;
+    double toplamMasraf = 0;
+
+    for (final isDoc in islerSnap.docs) {
       final isId = isDoc.id;
-      await _islerRef.doc(isId).set(isDoc.data());
-      aktarilanIsSayisi++;
 
-      // İşletmeler
-      final eskiIsletmelerSnap =
-          await eskiIslerRef.doc(isId).collection('isletmeler').get();
-      for (final isletmeDoc in eskiIsletmelerSnap.docs) {
-        final isletmeId = isletmeDoc.id;
-        await _isletmelerRef(isId).doc(isletmeId).set(isletmeDoc.data());
-
-        // Kayıtlar (borç/ödeme geçmişi)
-        final eskiKayitlarSnap = await eskiIslerRef
-            .doc(isId)
-            .collection('isletmeler')
-            .doc(isletmeId)
-            .collection('kayitlar')
-            .get();
-        for (final kayitDoc in eskiKayitlarSnap.docs) {
-          await _isletmelerRef(isId)
-              .doc(isletmeId)
-              .collection('kayitlar')
-              .doc(kayitDoc.id)
-              .set(kayitDoc.data());
-        }
+      final gelirlerSnap = await _gelirlerRef(isId).get();
+      for (final gelirDoc in gelirlerSnap.docs) {
+        toplamKazanc += (gelirDoc.data()['tutar'] as num?)?.toDouble() ?? 0;
       }
 
-      // Gelirler (kazanç kayıtları)
-      final eskiGelirlerSnap = await eskiIslerRef.doc(isId).collection('gelirler').get();
-      for (final gelirDoc in eskiGelirlerSnap.docs) {
-        await _gelirlerRef(isId).doc(gelirDoc.id).set(gelirDoc.data());
+      final isletmelerSnap = await _isletmelerRef(isId).get();
+      for (final isletmeDoc in isletmelerSnap.docs) {
+        final kayitlarSnap = await _isletmelerRef(isId)
+            .doc(isletmeDoc.id)
+            .collection('kayitlar')
+            .get();
+        for (final kayitDoc in kayitlarSnap.docs) {
+          final data = kayitDoc.data();
+          final tur = data['tur'] as String? ?? 'borc';
+          // Sadece borç kayıtları "yapılan masraf" sayılır — ödemeler,
+          // zaten yapılmış bir masrafın kapatılması, yeni masraf değil.
+          if (tur != 'odeme') {
+            toplamMasraf += (data['tutar'] as num?)?.toDouble() ?? 0;
+          }
+        }
       }
     }
 
-    return aktarilanIsSayisi;
+    return {
+      'kazanc': toplamKazanc,
+      'masraf': toplamMasraf,
+      'kar': toplamKazanc - toplamMasraf,
+    };
+  }
+
+  /// "Hesabı Sil" onaylandığında çağrılır: kullanıcının TÜM Firestore
+  /// verilerini (işler, işletmeler, kayıtlar, gelirler) ve Storage'daki
+  /// fiş fotoğraflarını KOMPLE siler. Firebase Auth hesabının kendisini
+  /// SİLMEZ — bu, FirebaseAuth.instance.currentUser.delete() ile ayrıca,
+  /// çağıran arayüz (profil paneli) tarafından yapılmalı, çünkü o bir
+  /// Auth işlemi, Firestore işlemi değil.
+  ///
+  /// Bilerek fire-and-forget DEĞİL — geri dönüşü olmayan bir işlem
+  /// olduğu için her adımın gerçekten tamamlandığından emin olunuyor.
+  Future<void> tumVerileriSil() async {
+    final islerSnap = await _islerRef.get();
+
+    for (final isDoc in islerSnap.docs) {
+      final isId = isDoc.id;
+
+      final isletmelerSnap = await _isletmelerRef(isId).get();
+      for (final isletmeDoc in isletmelerSnap.docs) {
+        final kayitlarRef = _isletmelerRef(isId).doc(isletmeDoc.id).collection('kayitlar');
+        final kayitlarSnap = await kayitlarRef.get();
+
+        for (final kayitDoc in kayitlarSnap.docs) {
+          final fotoUrl = kayitDoc.data()['fotoUrl'] as String?;
+          if (fotoUrl != null) {
+            try {
+              await FirebaseStorage.instance.refFromURL(fotoUrl).delete();
+            } catch (_) {
+              // Dosya zaten silinmiş olabilir — sorun değil, devam et.
+            }
+          }
+          await kayitDoc.reference.delete();
+        }
+        await isletmeDoc.reference.delete();
+      }
+
+      final gelirlerSnap = await _gelirlerRef(isId).get();
+      for (final gelirDoc in gelirlerSnap.docs) {
+        await gelirDoc.reference.delete();
+      }
+
+      await isDoc.reference.delete();
+    }
+
+    final iscilerSnap = await _iscilerRef.get();
+    for (final isciDoc in iscilerSnap.docs) {
+      final kayitlarSnap = await _isciKayitlarRef(isciDoc.id).get();
+      for (final kayitDoc in kayitlarSnap.docs) {
+        await kayitDoc.reference.delete();
+      }
+      await isciDoc.reference.delete();
+    }
   }
 }
