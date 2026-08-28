@@ -1,126 +1,98 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:uuid/uuid.dart';
 import 'package:path_provider/path_provider.dart';
-import '../models/bekleyen_foto.dart';
 import 'firestore_service.dart';
- 
-/// Fiş fotoğraflarının offline-first yükleme kuyruğu.
-///
-/// NEDEN GEREKLİ: Firestore'un aksine Firebase Storage, internet olmadan
-/// başlatılan yüklemeleri kendiliğinden kuyruğa alıp bağlantı gelince
-/// devam ettirmiyor. Orman/dağ gibi sinyalsiz alanlarda çekilen fişler bu
-/// yüzden kaybolabilir. Bu servis, fotoğrafı önce cihaza kaydedip
-/// (Hive kutusu + dosya sistemi), bağlantı geldiğinde sırayla Storage'a
-/// yüklüyor ve ilgili Firestore kaydını günceliyor.
+
+/// Fiş fotoğraflarını internet olmadan da "kaybetmeden" yükleyebilmek için
+/// basit bir yerel kuyruk. Fotoğraf seçildiğinde hemen kuyruğa (Hive) yazılır;
+/// bağlantı durumuna bakılmaksızın arka planda yükleme denenir, başarısız
+/// olursa bağlantı gelince otomatik tekrar denenir.
 class PhotoUploadService {
-  static const _kutuAdi = 'bekleyenFotolar';
- 
+  static const _kutuAdi = 'foto_kuyrugu';
   final FirestoreService _firestoreService;
-  final _uuid = const Uuid();
-  Box<BekleyenFoto>? _kutu;
- 
+  late Box _kutu;
+
   PhotoUploadService(this._firestoreService);
- 
-  /// main() içinde, uygulama açılırken bir kere çağrılmalı.
+
   Future<void> baslat() async {
-    Hive.registerAdapter(BekleyenFotoAdapter());
-    _kutu = await Hive.openBox<BekleyenFoto>(_kutuAdi);
- 
-    // Bağlantı her geldiğinde bekleyen fotoğrafları otomatik dene.
-    Connectivity().onConnectivityChanged.listen((sonuclar) {
-      final baglantiVar = sonuclar.any((s) => s != ConnectivityResult.none);
-      if (baglantiVar) {
+    _kutu = await Hive.openBox(_kutuAdi);
+    // Açılışta bekleyen varsa hemen bir deneme yap.
+    kuyrugunuIsle();
+    Connectivity().onConnectivityChanged.listen((sonuc) {
+      if (sonuc != ConnectivityResult.none) {
         kuyrugunuIsle();
       }
     });
- 
-    // Açılışta da bir kere dene (uygulama offline kapanıp online açılmış olabilir).
-    kuyrugunuIsle();
   }
- 
-  /// Çekilen fotoğrafı cihazın kalıcı dizinine kopyalar ve kuyruğa ekler.
-  /// Kayıt zaten oluşturulmuş olmalı (fotoBekliyor: true ile).
+
   Future<void> kuyrugaEkle({
     required File secilenFoto,
     required String isId,
     required String isletmeId,
     required String kayitId,
   }) async {
-    final belgeDizini = await getApplicationDocumentsDirectory();
-    final hedefYol =
-        '${belgeDizini.path}/fisler/${_uuid.v4()}${_uzanti(secilenFoto.path)}';
-    await Directory('${belgeDizini.path}/fisler').create(recursive: true);
-    final kalici = await secilenFoto.copy(hedefYol);
- 
-    await _kutu!.add(BekleyenFoto(
-      yerelDosyaYolu: kalici.path,
-      isId: isId,
-      isletmeId: isletmeId,
-      kayitId: kayitId,
-    ));
- 
-    // Bağlantı varsa hemen dene, yoksa bir sonraki onConnectivityChanged
-    // tetiklenmesini bekle.
-    _kuyruguGuvenliIsle();
-  }
- 
-  void _kuyruguGuvenliIsle() {
-    kuyrugunuIsle().catchError((_) {
-      // Sessizce yut — bağlantı yoksa zaten normal, sıradaki tetiklemede tekrar denenecek.
+    final belge = jsonEncode({
+      'yerelYol': secilenFoto.path,
+      'isId': isId,
+      'isletmeId': isletmeId,
+      'kayitId': kayitId,
+      'denemeSayisi': 0,
     });
+    await _kutu.add(belge);
+    kuyrugunuIsle();
   }
- 
-  /// Kuyruktaki tüm bekleyen fotoğrafları sırayla Storage'a yüklemeyi dener.
+
   Future<void> kuyrugunuIsle() async {
-    if (_kutu == null || _kutu!.isEmpty) return;
- 
-    final baglanti = await Connectivity().checkConnectivity();
-    if (baglanti.every((s) => s == ConnectivityResult.none)) return;
- 
-    // Kopyasını al: işlerken kutu değişebilir.
-    final bekleyenler = _kutu!.values.toList();
- 
-    for (final bekleyen in bekleyenler) {
+    final anahtarlar = _kutu.keys.toList();
+    for (final anahtar in anahtarlar) {
+      final ham = _kutu.get(anahtar);
+      if (ham == null) continue;
+      Map<String, dynamic> veri;
       try {
-        final dosya = File(bekleyen.yerelDosyaYolu);
-        if (!await dosya.exists()) {
-          await bekleyen.delete();
-          continue;
-        }
- 
-        final storageYolu =
-            'fisler/${bekleyen.isId}/${bekleyen.isletmeId}/${bekleyen.kayitId}${_uzanti(bekleyen.yerelDosyaYolu)}';
-        final ref = FirebaseStorage.instance.ref(storageYolu);
-        await ref.putFile(dosya);
-        final url = await ref.getDownloadURL();
- 
+        veri = jsonDecode(ham as String) as Map<String, dynamic>;
+      } catch (_) {
+        await _kutu.delete(anahtar);
+        continue;
+      }
+
+      final yerelYol = veri['yerelYol'] as String;
+      final dosya = File(yerelYol);
+      if (!await dosya.exists()) {
+        await _kutu.delete(anahtar);
+        continue;
+      }
+
+      try {
+        final isId = veri['isId'] as String;
+        final isletmeId = veri['isletmeId'] as String;
+        final kayitId = veri['kayitId'] as String;
+
+        final storageRef = FirebaseStorage.instance
+            .ref()
+            .child('fisler')
+            .child('$isId-$isletmeId-$kayitId.jpg');
+
+        await storageRef.putFile(dosya);
+        final url = await storageRef.getDownloadURL();
+
         await _firestoreService.kayitFotoGuncelle(
-          isId: bekleyen.isId,
-          isletmeId: bekleyen.isletmeId,
-          kayitId: bekleyen.kayitId,
+          isId: isId,
+          isletmeId: isletmeId,
+          kayitId: kayitId,
           fotoUrl: url,
         );
- 
-        await bekleyen.delete(); // Hive kutusundan çıkar.
+
+        await _kutu.delete(anahtar);
       } catch (_) {
-        bekleyen.denemeSayisi += 1;
-        await bekleyen.save();
-        // 10 denemeden sonra bile başarısızsa kullanıcıya ayrıca bir
-        // "senkronize edilemedi" göstergesi eklenebilir; şimdilik kuyrukta
-        // bırakıp bir sonraki bağlantı tetiklemesinde tekrar deniyoruz.
+        final denemeSayisi = (veri['denemeSayisi'] as int? ?? 0) + 1;
+        veri['denemeSayisi'] = denemeSayisi;
+        await _kutu.put(anahtar, jsonEncode(veri));
+        // Bağlantı yoksa ya da geçici bir hata varsa sessizce vazgeç,
+        // bir sonraki bağlantı değişiminde tekrar denenecek.
       }
     }
   }
- 
-  /// Fotoğrafı senkronize olmayı bekleyen kayıt sayısı (UI'da rozet için).
-  int bekleyenSayisi() => _kutu?.length ?? 0;
- 
-  String _uzanti(String yol) {
-    final nokta = yol.lastIndexOf('.');
-    return nokta == -1 ? '.jpg' : yol.substring(nokta);
-  }
 }
- 
