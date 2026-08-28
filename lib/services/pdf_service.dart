@@ -29,16 +29,12 @@ class PdfService {
     final isletmeler = await _firestoreService.isletmeleriGetir(is_.id);
     final gelirler = await _firestoreService.gelirleriGetir(is_.id);
 
-    // Her işletmenin kayıtlarını topluca çekiyoruz.
     final isletmeKayitlari = <IsletmeModel, List<KayitModel>>{};
     for (final isletme in isletmeler) {
       isletmeKayitlari[isletme] =
           await _firestoreService.kayitlariGetir(is_.id, isletme.id);
     }
 
-    // Ödenen/kalan/masraf/kâr — hepsi GÜVENİLİR OLSUN diye kayıtların
-    // kendisinden hesaplanıyor, saklanan "toplam" alanlarına güvenmiyoruz
-    // (offline'da sapma ihtimaline karşı, işletme detayındaki aynı mantık).
     double genelOdenen = 0;
     double genelKalan = 0;
     for (final kayitlar in isletmeKayitlari.values) {
@@ -50,7 +46,7 @@ class PdfService {
         }
       }
     }
-    genelKalan -= genelOdenen; // Kalan = toplam borç - ödenen.
+    genelKalan -= genelOdenen;
 
     final kazanilan = gelirler.fold<double>(0, (t, g) => t + g.tutar);
     final toplamMasraf = genelOdenen + genelKalan;
@@ -322,11 +318,9 @@ class PdfService {
         .replaceAll(' ', '_');
   }
 
-  /// Dart'ın standart `toUpperCase()`'i Türkçe'ye uygun değil — "Eflani"
-  /// gibi kelimelerdeki noktalı küçük "i"yi yanlışlıkla noktasız "I" yapıp
-  /// "EFLANI" yerine "EFLANI" değil "EFLANİ" olması gerekirken "Efanı" gibi
-  /// bozuk sonuçlar üretebiliyor. Bu, uygulama ekranlarında kullanılan
-  /// turkceBuyukHarf() ile aynı düzeltmenin PDF tarafındaki karşılığı.
+  /// Dart'ın standart `toUpperCase()`'i Türkçe'ye uygun değil — bu,
+  /// uygulama ekranlarında kullanılan turkceBuyukHarf() ile aynı
+  /// düzeltmenin PDF tarafındaki karşılığı.
   String _turkceBuyukHarf(String metin) {
     return metin.replaceAll('i', 'İ').toUpperCase();
   }
