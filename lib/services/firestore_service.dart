@@ -553,6 +553,25 @@ class FirestoreService {
     await _iscilerRef.doc(isciId).delete();
   }
 
+  /// "Geçmiş Kayıt Ekle" özelliğinin gizli olup olmadığını canlı olarak
+  /// dinler. Kullanıcı "artık ihtiyacım yok" deyip kalıcı olarak
+  /// gizleyene kadar false (yani görünür) döner.
+  Stream<bool> gecmisKayitGizliMi() {
+    return _db.collection('kullanicilar').doc(_uid).snapshots().map(
+          (doc) => doc.data()?['gecmisKayitGizli'] as bool? ?? false,
+        );
+  }
+
+  /// "Geçmiş Kayıt Ekle" butonunu kalıcı olarak gizler. Tek seferlik bir
+  /// veri aktarımı özelliği olduğu için, kullanıcı işini bitirdiğinde bir
+  /// daha görmek istemeyebilir.
+  Future<void> gecmisKayitOzelliginiGizle() async {
+    await _db.collection('kullanicilar').doc(_uid).set(
+      {'gecmisKayitGizli': true},
+      SetOptions(merge: true),
+    );
+  }
+
   // ---------------------------------------------------------------------
   // Profil paneli — İstatistikler ve Hesabı Sil
   // ---------------------------------------------------------------------
