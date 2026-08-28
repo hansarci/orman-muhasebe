@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../models/is_model.dart';
 import '../services/firestore_service.dart';
@@ -8,12 +9,11 @@ import '../widgets/ortak_widgetlar.dart';
 import '../widgets/yeni_is_modal.dart';
 import 'is_detay_screen.dart';
 
-/// Uygulamanın karşılama ekranı: tüm işlerin (Ballıdağ, Karaçam Yolu vb.)
-/// listelendiği arşiv. Firestore boşsa liste de boş görünür — burada
-/// hiçbir örnek/test kaydı oluşturulmaz.
+/// Uygulamanın karşılama ekranı: giriş yapan kullanıcının KENDİ işlerinin
+/// (Ballıdağ, Karaçam Yolu vb.) listelendiği arşiv.
 ///
 /// Bir satıra UZUN BASINCA satır kabarır, "Kazanç ekle" ve "PDF Gönder"
-/// seçenekleri belirir (HTML mockup'ta kararlaştırılan tasarım).
+/// seçenekleri belirir.
 class ArsivScreen extends StatefulWidget {
   final FirestoreService firestoreService;
   final PhotoUploadService photoUploadService;
@@ -29,8 +29,6 @@ class ArsivScreen extends StatefulWidget {
 }
 
 class _ArsivScreenState extends State<ArsivScreen> {
-  /// Hangi işin satırının "kabarmış" (uzun basılmış) durumda olduğunu
-  /// tutar. Boş bir yere dokununca null'a döner, satır eski haline iner.
   String? _seciliIsId;
   bool _pdfHazirlaniyor = false;
   late final PdfService _pdfService;
@@ -100,6 +98,33 @@ class _ArsivScreenState extends State<ArsivScreen> {
     }
   }
 
+  Future<void> _cikisYap() async {
+    final onay = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.panel,
+        title: const Text('Çıkış yap', style: TextStyle(color: AppColors.yazi)),
+        content: const Text(
+          'Hesabından çıkış yapmak istediğine emin misin?',
+          style: TextStyle(color: AppColors.yaziSoluk),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Vazgeç'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Çıkış Yap', style: TextStyle(color: Colors.redAccent)),
+          ),
+        ],
+      ),
+    );
+    if (onay == true) {
+      await FirebaseAuth.instance.signOut();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -108,7 +133,7 @@ class _ArsivScreenState extends State<ArsivScreen> {
         actions: [
           if (_pdfHazirlaniyor)
             const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
+              padding: EdgeInsets.symmetric(horizontal: 12),
               child: Center(
                 child: SizedBox(
                   width: 18,
@@ -117,6 +142,11 @@ class _ArsivScreenState extends State<ArsivScreen> {
                 ),
               ),
             ),
+          IconButton(
+            tooltip: 'Çıkış yap',
+            onPressed: _cikisYap,
+            icon: const Icon(Icons.logout),
+          ),
         ],
       ),
       body: GestureDetector(
@@ -210,7 +240,7 @@ class _IsSatiri extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onLongPress: onUzunBas,
-      onTap: secili ? () {} : onTap, // Kabarmışken satıra dokunmak seçimi kapatmasın.
+      onTap: secili ? () {} : onTap,
       child: AnimatedScale(
         scale: secili ? 1.03 : 1.0,
         duration: const Duration(milliseconds: 150),
