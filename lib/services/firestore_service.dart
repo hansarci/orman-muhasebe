@@ -522,6 +522,22 @@ class FirestoreService {
     );
   }
 
+  /// Bir işçi için BUGÜN zaten bir "geldi" kaydı girilmiş mi diye bakar.
+  /// Aynı satıra günde birden fazla kez tıklayıp yanlışlıkla defalarca
+  /// hak ediş eklenmesini önlemek için kullanılıyor.
+  Future<bool> isciBugunIsaretliMi(String isciId) async {
+    final buGunBasi = DateTime.now();
+    final gunBaslangici = DateTime(buGunBasi.year, buGunBasi.month, buGunBasi.day);
+    final gunSonu = gunBaslangici.add(const Duration(days: 1));
+
+    final snap = await _isciKayitlarRef(isciId)
+        .where('tarih', isGreaterThanOrEqualTo: Timestamp.fromDate(gunBaslangici))
+        .where('tarih', isLessThan: Timestamp.fromDate(gunSonu))
+        .get();
+
+    return snap.docs.any((doc) => doc.data()['tur'] == 'gelis');
+  }
+
   /// Bir işçiyi ve tüm hareket kayıtlarını komple siler. Tamamen ödenmiş
   /// (kazanç sıfırlanmış) ve PDF'i gönderilmiş bir işçiyi listeden
   /// otomatik kaldırmak için kullanılıyor. Geri dönüşü yok, bu yüzden
