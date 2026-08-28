@@ -163,7 +163,7 @@ class _GirisScreenState extends State<GirisScreen> {
                     controller: _kullaniciAdiController,
                     textAlign: TextAlign.center,
                     autocorrect: false,
-                    textCapitalization: TextCapitalization.none,
+                    textCapitalization: TextCapitalization.words,
                     style: const TextStyle(color: AppColors.yazi),
                     decoration: InputDecoration(
                       hintText: _kayitModu ? 'Kullanıcı Adı Oluştur' : 'Kullanıcı Adı',
