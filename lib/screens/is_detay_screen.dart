@@ -60,14 +60,13 @@ class _IsDetayScreenState extends State<IsDetayScreen> {
 
     setState(() => _kaydediliyor = true);
     try {
-      final kimlikler = await widget.firestoreService.isletmeyeKayitEkle(
+      final kimlikler = widget.firestoreService.isletmeyeKayitEkle(
         isId: widget.isId,
         isletmeAdi: isletmeAdi,
         tutar: tutar,
         yerelFotoYolu: _secilenFoto?.path,
       );
 
-      // Sadece fotoğraf gerçekten seçildiyse Storage'a yükleme dener.
       if (_secilenFoto != null) {
         await widget.photoUploadService.kuyrugaEkle(
           secilenFoto: _secilenFoto!,
