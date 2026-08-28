@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../models/gelir_model.dart';
 import '../models/is_model.dart';
@@ -21,11 +22,12 @@ class KayitKimlikleri {
 
 /// Tüm Firestore okuma/yazma işlemlerini tek yerde toplayan servis.
 ///
-/// Veri yapısı, HTML mockup'ta üzerinde uzlaşılan üç seviyeli hiyerarşiyi
-/// birebir yansıtır:
-///   isler/{isId}
+/// Veri yapısı — HER KULLANICININ KENDİ VERİSİ olacak şekilde, giriş
+/// yapan kullanıcının UID'si altında saklanıyor:
+///   kullanicilar/{uid}/isler/{isId}
 ///     isletmeler/{isletmeId}
 ///       kayitlar/{kayitId}
+///     gelirler/{gelirId}
 ///
 /// Not: İşletme belgesinin ID'si, işletme adından türetilen bir "slug"
 /// olarak seçilir (bkz. _slug). Böylece "bu işletme zaten var mı" sorusu
@@ -33,19 +35,34 @@ class KayitKimlikleri {
 ///
 /// ÖNEMLİ — offline çalışma: toplamları güncellerken bilerek Firestore
 /// "transaction"ları KULLANILMIYOR. Transaction'lar sunucudan güncel veri
-/// okumayı gerektirdiği için internet olmadan tamamen çalışmıyor (sonsuza
-/// kadar bekliyor/başarısız oluyor). Bunun yerine `FieldValue.increment()`
-/// kullanılıyor — bu, hem online hem offline çalışan, yerel önbelleğe
-/// hemen yazılıp bağlantı gelince sunucuyla senkronize olan atomik bir
-/// artırma/azaltma işlemi.
+/// okumayı gerektirdiği için internet olmadan tamamen çalışmıyor. Bunun
+/// yerine `FieldValue.increment()` ve "gönder ve unut" (fire-and-forget)
+/// yazma kullanılıyor — ID'ler yerel üretiliyor, `.set()`/`.update()`
+/// çağrıları BEKLENMİYOR, arayüz hiçbir zaman ağ/Firestore cevabını
+/// beklemek zorunda kalmıyor.
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  /// Giriş yapan kullanıcının UID'si. Giriş yapılmadan bu servisin
+  /// kullanılmaması gerekir (main.dart, giriş yapılmadan ArsivScreen'i
+  /// hiç açmıyor) — yine de bir güvenlik önlemi olarak burada kontrol var.
+  String get _uid {
+    final kullanici = _auth.currentUser;
+    if (kullanici == null) {
+      throw StateError('FirestoreService kullanılmadan önce giriş yapılmalı.');
+    }
+    return kullanici.uid;
+  }
 
   CollectionReference<Map<String, dynamic>> get _islerRef =>
-      _db.collection('isler');
+      _db.collection('kullanicilar').doc(_uid).collection('isler');
 
   CollectionReference<Map<String, dynamic>> _isletmelerRef(String isId) =>
       _islerRef.doc(isId).collection('isletmeler');
+
+  CollectionReference<Map<String, dynamic>> _gelirlerRef(String isId) =>
+      _islerRef.doc(isId).collection('gelirler');
 
   /// "Motorcu " -> "motorcu", "Kara Çam Yolu" -> "kara-cam-yolu" gibi basit
   /// bir slug üretir. Türkçe karakterleri sadeleştirir.
@@ -106,16 +123,9 @@ class FirestoreService {
   /// işletme/tutar olmadan boş bir iş açar. İşletmeler daha sonra iş
   /// detay ekranından tek tek eklenir. Oluşturulan işin ID'sini döndürür.
   ///
-  /// ÖNEMLİ — "gönder ve unut" (fire-and-forget): belge ID'si zaten
-  /// tamamen yerel olarak (ağa hiç değmeden) üretiliyor, bu yüzden onu
-  /// senkron döndürüyoruz. `.set()` yazma işlemini BEKLEMİYORUZ —
-  /// Firestore bunu kendi iç kuyruğuna alıp (internet olsun olmasın)
-  /// arka planda tamamlıyor. Böylece UI hiçbir zaman "yazma bitene kadar"
-  /// beklemek zorunda kalmıyor; sinyalsiz bir ormanda bile arayüz anında
-  /// tepki veriyor.
+  /// "Gönder ve unut": ID yerel üretiliyor, yazma beklenmiyor.
   String bosIsOlustur({required String isAdi}) {
     final isRef = _islerRef.doc();
-    // Bilerek await YOK — arka planda çalışsın.
     // ignore: unawaited_futures
     isRef.set(
       IsModel(
@@ -161,10 +171,8 @@ class FirestoreService {
   /// Bir işin altına yeni bir masraf kaydı ekler. İşletme daha önce yoksa
   /// otomatik oluşturulur, varsa toplamı artırılır.
   ///
-  /// "Gönder ve unut": tüm ID'ler yerel olarak (ağa değmeden) üretiliyor,
-  /// bu yüzden fonksiyon senkron dönüyor. Üç yazma işlemi de (`.set()`)
-  /// BEKLENMİYOR — Firestore'un kendi kuyruğuna bırakılıyor, arka planda
-  /// (internet olsun olmasın) tamamlanıyor. UI hiçbir zaman askıda kalmıyor.
+  /// "Gönder ve unut": tüm ID'ler yerel olarak üretiliyor, bu yüzden
+  /// fonksiyon senkron dönüyor. Üç yazma işlemi de BEKLENMİYOR.
   KayitKimlikleri isletmeyeKayitEkle({
     required String isId,
     required String isletmeAdi,
@@ -379,21 +387,18 @@ class FirestoreService {
       for (final belge in sorguSonucu.docs) {
         final data = belge.data();
         final fotoUrl = data['fotoUrl'] as String?;
-        if (fotoUrl == null) continue; // Zaten fotoğrafı yok, atla.
+        if (fotoUrl == null) continue;
 
         try {
           await FirebaseStorage.instance.refFromURL(fotoUrl).delete();
         } catch (_) {
-          // Storage'da dosya zaten silinmiş olabilir — yine de Firestore
-          // tarafını temizlemeye devam ediyoruz.
+          // Storage'da dosya zaten silinmiş olabilir.
         }
 
         await belge.reference.update({'fotoUrl': null, 'fotoBekliyor': false});
       }
     } catch (e) {
-      // Bağlantı yoksa (Source.server zaten offline'da hemen hata verir)
-      // ya da gerekli Firestore index'i henüz oluşmadıysa sessizce vazgeç —
-      // bir sonraki açılışta, bağlantı varken tekrar denenecek.
+      // Bağlantı yoksa ya da index henüz oluşmadıysa sessizce vazgeç.
     }
   }
 
@@ -401,15 +406,9 @@ class FirestoreService {
   // Gelir (kazanç) — Arşivdeki iş satırına uzun basınca "Kazanç ekle"
   // ---------------------------------------------------------------------
 
-  CollectionReference<Map<String, dynamic>> _gelirlerRef(String isId) =>
-      _islerRef.doc(isId).collection('gelirler');
-
-  /// Bir işe yeni bir kazanç (gelir) kaydı ekler. Borç/ödeme kayıtlarıyla
-  /// aynı mantık: her giriş ayrı, tarihli bir belge — tek bir toplam alanı
-  /// DEĞİL, PDF ve ekranlar toplamı her zaman bu kayıtların kendisinden
-  /// hesaplıyor (offline'da güvenilir olsun diye).
-  ///
-  /// "Gönder ve unut": ID yerel üretiliyor, yazma beklenmiyor.
+  /// Bir işe yeni bir kazanç (gelir) kaydı ekler. Her giriş ayrı, tarihli
+  /// bir belge — PDF ve ekranlar toplamı her zaman bu kayıtların
+  /// kendisinden hesaplıyor. "Gönder ve unut": ID yerel üretiliyor.
   String gelirEkle({required String isId, required double tutar}) {
     final gelirRef = _gelirlerRef(isId).doc();
     // ignore: unawaited_futures
