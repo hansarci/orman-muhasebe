@@ -529,6 +529,24 @@ class FirestoreService {
   /// emin olunuyor.
   Future<void> isciSil(String isciId) async {
     final kayitlarSnap = await _isciKayitlarRef(isciId).get();
+
+    // Silmeden önce, bu işçiye bugüne kadar ödenen toplamı kalıcı bir
+    // sayaca ekliyoruz — böylece kayıtlar silinse de "Toplam Masraf"
+    // istatistiğinden düşmüyor.
+    double odenenToplam = 0;
+    for (final kayitDoc in kayitlarSnap.docs) {
+      final data = kayitDoc.data();
+      if (data['tur'] == 'odeme') {
+        odenenToplam += (data['tutar'] as num?)?.toDouble() ?? 0;
+      }
+    }
+    if (odenenToplam > 0) {
+      await _db.collection('kullanicilar').doc(_uid).set(
+        {'silinenIscilereOdenenToplam': FieldValue.increment(odenenToplam)},
+        SetOptions(merge: true),
+      );
+    }
+
     for (final kayitDoc in kayitlarSnap.docs) {
       await kayitDoc.reference.delete();
     }
@@ -573,6 +591,24 @@ class FirestoreService {
         }
       }
     }
+
+    // İşçilere ödenen paralar da masraf sayılır. Hâlâ listede duran
+    // işçilerin ödeme kayıtları buradan toplanıyor; tamamen ödenip
+    // listeden silinmiş eski işçilerin ödemeleri ise (kayıtları
+    // silindiği için) kalıcı bir sayaçtan (bkz. isciSil) okunuyor.
+    final iscilerSnap = await _iscilerRef.get();
+    for (final isciDoc in iscilerSnap.docs) {
+      final kayitlarSnap = await _isciKayitlarRef(isciDoc.id).get();
+      for (final kayitDoc in kayitlarSnap.docs) {
+        final data = kayitDoc.data();
+        if (data['tur'] == 'odeme') {
+          toplamMasraf += (data['tutar'] as num?)?.toDouble() ?? 0;
+        }
+      }
+    }
+
+    final kullaniciDoc = await _db.collection('kullanicilar').doc(_uid).get();
+    toplamMasraf += (kullaniciDoc.data()?['silinenIscilereOdenenToplam'] as num?)?.toDouble() ?? 0;
 
     return {
       'kazanc': toplamKazanc,
@@ -631,5 +667,13 @@ class FirestoreService {
       }
       await isciDoc.reference.delete();
     }
+
+    // isciSil'in yazdığı kalıcı "silinen işçilere ödenen" sayacını da
+    // temizle — yoksa hesap sıfırlandıktan sonra bile eski bir rakam
+    // istatistiklerde kalmaya devam eder.
+    await _db.collection('kullanicilar').doc(_uid).set(
+      {'silinenIscilereOdenenToplam': 0},
+      SetOptions(merge: true),
+    );
   }
 }
