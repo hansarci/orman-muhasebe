@@ -18,55 +18,50 @@ class AppTheme {
     final inter = GoogleFonts.interTextTheme();
 
     return ThemeData(
-      useMaterial3: true,
       scaffoldBackgroundColor: AppColors.zemin,
-      colorScheme: const ColorScheme.dark(
+      colorScheme: ColorScheme.dark(
         primary: AppColors.turuncu,
         secondary: AppColors.yesilTik,
         surface: AppColors.panel,
       ),
-      textTheme: inter.apply(
-        bodyColor: AppColors.yazi,
-        displayColor: AppColors.yazi,
-      ),
-      fontFamily: GoogleFonts.inter().fontFamily,
       appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.panel,
+        backgroundColor: AppColors.zemin,
+        foregroundColor: AppColors.yazi,
         elevation: 0,
         centerTitle: true,
         titleTextStyle: oswald.titleLarge?.copyWith(
           color: AppColors.yazi,
           fontWeight: FontWeight.w600,
-          letterSpacing: 0.6,
-          fontSize: 20,
+          letterSpacing: 0.5,
         ),
       ),
+      textTheme: inter.apply(bodyColor: AppColors.yazi, displayColor: AppColors.yazi),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.panel,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-        hintStyle: const TextStyle(color: AppColors.yaziSoluk),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.turuncu, width: 2),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.turuncu, width: 1.4),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.turuncu, width: 2),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.turuncu, width: 1.4),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.turuncu, width: 2),
         ),
+        hintStyle: const TextStyle(color: AppColors.yaziSoluk),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: AppColors.yesilTik,
-        foregroundColor: Color(0xFF16311F),
+        foregroundColor: AppColors.zemin,
       ),
+      useMaterial3: true,
     );
   }
 
-  /// "Masraf kaydı oluştur" / "Borç ekle" gibi ana aksiyon butonu stili.
   static ButtonStyle anaButonStili() {
     return OutlinedButton.styleFrom(
       backgroundColor: AppColors.panel,
@@ -80,16 +75,16 @@ class AppTheme {
     return GoogleFonts.fraunces(
       fontStyle: FontStyle.italic,
       fontWeight: FontWeight.w500,
-      fontSize: 17,
+      fontSize: 16,
       color: AppColors.yazi,
     );
   }
 
-  static TextStyle paraStili({double size = 15, Color? renk}) {
+  static TextStyle paraStili({double size = 15}) {
     return GoogleFonts.oswald(
       fontWeight: FontWeight.w600,
       fontSize: size,
-      color: renk ?? AppColors.turuncu,
+      color: AppColors.turuncu,
     );
   }
 }
