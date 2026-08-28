@@ -58,20 +58,20 @@ class ToplamSatiri extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 20),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Align(
+        alignment: Alignment.centerRight,
         child: RichText(
           text: TextSpan(
-            style: AppTheme.paraStili(size: 17, renk: AppColors.yazi),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.yazi),
             children: [
               TextSpan(text: '$etiket: '),
               TextSpan(
-                text: _paraFormat.format(tutar),
+                text: '${_paraFormat.format(tutar)} ',
                 style: const TextStyle(color: AppColors.yesilTik),
               ),
-              const TextSpan(text: ' ₺', style: TextStyle(color: AppColors.yesilTik)),
+              const TextSpan(text: '₺', style: TextStyle(color: AppColors.yesilTik)),
             ],
           ),
         ),
@@ -80,10 +80,7 @@ class ToplamSatiri extends StatelessWidget {
   }
 }
 
-/// Geçmiş kayıtlar listesindeki "10 Ağu 2026" + tutar satırı, opsiyonel fiş thumbnail'i ile.
-String tarihFormatla(DateTime tarih) {
-  return DateFormat('dd MMM yyyy', 'tr_TR').format(tarih);
-}
+String tarihFormatla(DateTime tarih) => DateFormat('dd.MM.yyyy').format(tarih);
 
 String paraFormatla(double tutar) => _paraFormat.format(tutar);
 
@@ -127,91 +124,33 @@ double? tutarMetniniSayiyaCevir(String metin) {
   return double.tryParse(temiz);
 }
 
-/// İşletme detayındaki "Geçmiş Kayıtlar" listesinin tek satırı.
-/// Fişi varsa solda küçük thumbnail, tıklanınca büyütülüyor.
-class GecmisKayitSatiri extends StatelessWidget {
-  final DateTime tarih;
-  final double tutar;
-  final String? fotoUrl;
-  final bool fotoBekliyor;
-  final VoidCallback? onFotoTikla;
-
-  const GecmisKayitSatiri({
-    super.key,
-    required this.tarih,
-    required this.tutar,
-    this.fotoUrl,
-    this.fotoBekliyor = false,
-    this.onFotoTikla,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.panel,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.turuncu.withOpacity(0.2)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              if (fotoUrl != null) ...[
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: onFotoTikla,
-                    child: Padding(
-                      padding: const EdgeInsets.all(6),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: Image.network(
-                          fotoUrl!,
-                          width: 32,
-                          height: 32,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Container(
-                            width: 32,
-                            height: 32,
-                            color: AppColors.zemin,
-                            child: const Icon(Icons.broken_image_outlined,
-                                size: 16, color: AppColors.yaziSoluk),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
-              ] else if (fotoBekliyor) ...[
-                const SizedBox(
-                  width: 32,
-                  height: 32,
-                  child: Icon(Icons.cloud_upload_outlined,
-                      size: 18, color: AppColors.yaziSoluk),
-                ),
-                const SizedBox(width: 10),
-              ],
-              Text(tarihFormatla(tarih),
-                  style: const TextStyle(fontSize: 13.5, color: AppColors.yazi)),
-            ],
-          ),
-          RichText(
-            text: TextSpan(
-              style: AppTheme.paraStili(size: 13.5),
-              children: [
-                TextSpan(text: paraFormatla(tutar)),
-                const TextSpan(text: ' ₺', style: TextStyle(color: AppColors.yesilTik)),
-              ],
+/// Bir fiş fotoğrafını tam ekran (lightbox) olarak açar.
+void fisiBuyukGoster(BuildContext context, String fotoUrl) {
+  showDialog(
+    context: context,
+    barrierColor: Colors.black87,
+    builder: (context) => GestureDetector(
+      onTap: () => Navigator.of(context).pop(),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                child: Image.network(fotoUrl),
+              ),
             ),
-          ),
-        ],
+            Positioned(
+              top: 40,
+              right: 20,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ),
+          ],
+        ),
       ),
-    );
-  }
+    ),
+  );
 }
