@@ -432,4 +432,61 @@ class FirestoreService {
     final snap = await _gelirlerRef(isId).orderBy('tarih', descending: true).get();
     return snap.docs.map(GelirModel.fromFirestore).toList();
   }
+
+  // ---------------------------------------------------------------------
+  // TEK SEFERLİK GÖÇ ARACI
+  // ---------------------------------------------------------------------
+
+  /// Kullanıcı girişi (auth) eklenmeden ÖNCE, kök dizinde ("isler/...")
+  /// duran eski paylaşımlı verileri, giriş yapan kullanıcının kendi
+  /// alanına ("kullanicilar/{uid}/isler/...") kopyalar. Mevcut kayıtların
+  /// ID'leri korunur, hiçbir şey yeniden numaralandırılmaz.
+  ///
+  /// Kopyalama bitince ESKİ VERİ SİLİNMEZ — bilerek. İstersen taşımanın
+  /// doğru gittiğini gördükten sonra Firebase Console'dan elle silersin.
+  /// Bu metodun çalışabilmesi için Firestore kurallarında eski "isler"
+  /// kök koleksiyonuna GEÇİCİ bir okuma izni açılmış olması gerekir.
+  Future<int> eskiVerileriAktar() async {
+    final eskiIslerRef = _db.collection('isler');
+    final eskiIslerSnap = await eskiIslerRef.get();
+
+    var aktarilanIsSayisi = 0;
+
+    for (final isDoc in eskiIslerSnap.docs) {
+      final isId = isDoc.id;
+      await _islerRef.doc(isId).set(isDoc.data());
+      aktarilanIsSayisi++;
+
+      // İşletmeler
+      final eskiIsletmelerSnap =
+          await eskiIslerRef.doc(isId).collection('isletmeler').get();
+      for (final isletmeDoc in eskiIsletmelerSnap.docs) {
+        final isletmeId = isletmeDoc.id;
+        await _isletmelerRef(isId).doc(isletmeId).set(isletmeDoc.data());
+
+        // Kayıtlar (borç/ödeme geçmişi)
+        final eskiKayitlarSnap = await eskiIslerRef
+            .doc(isId)
+            .collection('isletmeler')
+            .doc(isletmeId)
+            .collection('kayitlar')
+            .get();
+        for (final kayitDoc in eskiKayitlarSnap.docs) {
+          await _isletmelerRef(isId)
+              .doc(isletmeId)
+              .collection('kayitlar')
+              .doc(kayitDoc.id)
+              .set(kayitDoc.data());
+        }
+      }
+
+      // Gelirler (kazanç kayıtları)
+      final eskiGelirlerSnap = await eskiIslerRef.doc(isId).collection('gelirler').get();
+      for (final gelirDoc in eskiGelirlerSnap.docs) {
+        await _gelirlerRef(isId).doc(gelirDoc.id).set(gelirDoc.data());
+      }
+    }
+
+    return aktarilanIsSayisi;
+  }
 }
