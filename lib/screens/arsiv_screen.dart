@@ -98,6 +98,60 @@ class _ArsivScreenState extends State<ArsivScreen> {
     }
   }
 
+  bool _aktariliyor = false;
+
+  Future<void> _eskiVerileriAktar() async {
+    final onay = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.panel,
+        title: const Text('Eski Verileri Aktar', style: TextStyle(color: AppColors.yazi)),
+        content: const Text(
+          'Önceki (giriş yapmadan önceki) tüm işler, işletmeler, kayıtlar '
+          've kazançlar bu hesaba kopyalanacak. Bu işlem birkaç dakika '
+          'sürebilir ve internet bağlantısı gerektirir. Devam edilsin mi?',
+          style: TextStyle(color: AppColors.yaziSoluk),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Vazgeç'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Aktar', style: TextStyle(color: AppColors.yesilTik)),
+          ),
+        ],
+      ),
+    );
+    if (onay != true) return;
+
+    setState(() => _aktariliyor = true);
+    try {
+      final sayi = await widget.firestoreService.eskiVerileriAktar();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$sayi iş başarıyla bu hesaba aktarıldı.'),
+            backgroundColor: AppColors.yesilTik,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Aktarım sırasında hata oluştu: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 8),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _aktariliyor = false);
+    }
+  }
+
   Future<void> _cikisYap() async {
     final onay = await showDialog<bool>(
       context: context,
@@ -131,7 +185,7 @@ class _ArsivScreenState extends State<ArsivScreen> {
       appBar: AppBar(
         title: const Text('BORÇ KAYITLARI'),
         actions: [
-          if (_pdfHazirlaniyor)
+          if (_pdfHazirlaniyor || _aktariliyor)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 12),
               child: Center(
@@ -142,6 +196,11 @@ class _ArsivScreenState extends State<ArsivScreen> {
                 ),
               ),
             ),
+          IconButton(
+            tooltip: 'Eski verileri bu hesaba aktar',
+            onPressed: _aktariliyor ? null : _eskiVerileriAktar,
+            icon: const Icon(Icons.cloud_sync_outlined),
+          ),
           IconButton(
             tooltip: 'Çıkış yap',
             onPressed: _cikisYap,
