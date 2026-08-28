@@ -5,10 +5,10 @@ import '../theme/app_theme.dart';
 import '../screens/is_detay_screen.dart';
 
 /// Sağ alttaki yeşil + butonuyla açılan, sadeleştirilmiş yeni iş paneli.
-/// HTML mockup'ta kararlaştırılan yeni tasarım: sabit "YENİ İŞ OLUŞTUR"
-/// başlığı, altında iş adı kutusu, altında tek "İşi Başlat" butonu.
-/// İşletme/tutar/fiş fotoğrafı burada YOK — "İşi Başlat"a basınca boş
-/// bir iş açılıyor ve direkt o işin detay sayfasına geçiliyor.
+/// Sabit "YENİ İŞ OLUŞTUR" başlığı, altında iş adı kutusu, altında tek
+/// "İşi Başlat" butonu. İşletme/tutar/fiş fotoğrafı burada YOK — "İşi
+/// Başlat"a basınca boş bir iş açılıyor ve direkt o işin detay sayfasına
+/// geçiliyor.
 Future<void> yeniIsModalAc(
   BuildContext context, {
   required FirestoreService firestoreService,
@@ -55,12 +55,11 @@ class _YeniIsPaneliState extends State<_YeniIsPaneli> {
     setState(() => _kaydediliyor = true);
 
     try {
-      final isId = await widget.firestoreService.bosIsOlustur(isAdi: isAdi);
+      final isId = widget.firestoreService.bosIsOlustur(isAdi: isAdi);
 
       if (!mounted) return;
       Navigator.of(context).pop(); // Paneli kapat.
 
-      // Yeni açılan boş işin detayına direkt geç.
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => IsDetayScreen(
