@@ -117,6 +117,19 @@ class _IscilerPaneliState extends State<IscilerPaneli> {
   }
 
   Future<void> _isciGeldiMiSor(IsciModel isci) async {
+    final zatenIsaretli = await widget.firestoreService.isciBugunIsaretliMi(isci.id);
+    if (zatenIsaretli) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${isci.isim} için bugün zaten işaretlendi.'),
+            backgroundColor: AppColors.panel,
+          ),
+        );
+      }
+      return;
+    }
+
     final geldi = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
