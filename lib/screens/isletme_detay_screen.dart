@@ -6,15 +6,16 @@ import '../models/kayit_model.dart';
 import '../services/firestore_service.dart';
 import '../services/photo_upload_service.dart';
 import '../theme/app_theme.dart';
-import '../widgets/fis_lightbox.dart';
 import '../widgets/ortak_widgetlar.dart';
 
 /// Bir işletmenin (ör. "Motorcu") o iş kapsamındaki tüm borç geçmişini
-/// gösteren ekran. Fiş fotoğrafı EKLEMEK opsiyonel: kamera butonuna
-/// basılmazsa Storage'a hiç istek gitmez.
+/// gösteren ve yeni borç/ödeme eklemeyi sağlayan en alt seviye ekran.
 ///
-/// Geçmiş kayıtlar listesinde bir satıra UZUN BASINCA "Düzenle" ve "Sil"
-/// seçenekleri beliriyor (HTML mockup'ta kararlaştırılan tasarım).
+/// Fiş fotoğrafı EKLEMEK opsiyonel: kamera butonuna basılmazsa Storage'a
+/// hiç istek gitmez. "Ödeme Yap"/"Borç ekle" butonlarının altında "Hızlı
+/// Filtreleme" dropdown'ı var. Geçmiş kayıtlar listesinde bir satıra uzun
+/// basınca kabarıp "Tutar Düzenle" (ve fişi olan kayıtlarda "Fişi Gör")
+/// butonu beliriyor.
 class IsletmeDetayScreen extends StatefulWidget {
   final String isId;
   final String isletmeId;
@@ -39,10 +40,9 @@ class _IsletmeDetayScreenState extends State<IsletmeDetayScreen> {
   bool _kaydediliyor = false;
 
   /// Hangi kaydın "kabarmış" (uzun basılmış) durumda olduğunu tutar.
-  /// Boş bir yere dokununca null'a döner, satır eski haline iner.
   String? _seciliKayitId;
 
-  /// "Hızlı Filtreleme" dropdown'ından seçilen filtre. null = Tümü.
+  /// "Hızlı Filtreleme" dropdown'ından seçilen filtre. null = Tüm Borçlar.
   String? _seciliFiltre;
 
   static const _filtreSecenekleri = [
@@ -76,21 +76,18 @@ class _IsletmeDetayScreenState extends State<IsletmeDetayScreen> {
 
     setState(() => _kaydediliyor = true);
     try {
-      final KayitKimlikleri kimlikler;
-      if (odemeMi) {
-        kimlikler = await widget.firestoreService.odemeEkle(
-          isId: widget.isId,
-          isletmeId: widget.isletmeId,
-          tutar: tutar,
-        );
-      } else {
-        kimlikler = await widget.firestoreService.borcEkle(
-          isId: widget.isId,
-          isletmeId: widget.isletmeId,
-          tutar: tutar,
-          yerelFotoYolu: _secilenFoto?.path,
-        );
-      }
+      final kimlikler = odemeMi
+          ? widget.firestoreService.odemeEkle(
+              isId: widget.isId,
+              isletmeId: widget.isletmeId,
+              tutar: tutar,
+            )
+          : widget.firestoreService.borcEkle(
+              isId: widget.isId,
+              isletmeId: widget.isletmeId,
+              tutar: tutar,
+              yerelFotoYolu: _secilenFoto?.path,
+            );
 
       if (!odemeMi && _secilenFoto != null) {
         await widget.photoUploadService.kuyrugaEkle(
@@ -117,12 +114,6 @@ class _IsletmeDetayScreenState extends State<IsletmeDetayScreen> {
             (isletmeListSnap.data ?? []).where((e) => e.id == widget.isletmeId);
         final isletme = eslesenler.isEmpty ? null : eslesenler.first;
 
-        // Toplamı işletme belgesindeki "toplam" alanından DEĞİL, geçmiş
-        // kayıtların kendisinden hesaplıyoruz. Sebep: offline'da yeni
-        // oluşturulan bir işletmenin "toplam" alanı bazen hemen optimistik
-        // güncellenmeyebiliyor, ama kayıt listesi (StreamBuilder altında)
-        // her zaman anında ve doğru güncelleniyor — o yüzden tek gerçek
-        // kaynak (source of truth) olarak listeyi kullanıyoruz.
         return StreamBuilder<List<KayitModel>>(
           stream: widget.firestoreService.kayitlarStream(widget.isId, widget.isletmeId),
           builder: (context, kayitSnap) {
@@ -147,205 +138,204 @@ class _IsletmeDetayScreenState extends State<IsletmeDetayScreen> {
   ) {
     return Scaffold(
       body: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onTap: () {
-              if (_seciliKayitId != null) setState(() => _seciliKayitId = null);
-            },
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+        behavior: HitTestBehavior.translucent,
+        onTap: () {
+          if (_seciliKayitId != null) setState(() => _seciliKayitId = null);
+        },
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
                   children: [
-                  Row(
-                    children: [
-                      OutlinedButton(
-                        onPressed: () => Navigator.of(context).pop(),
+                    OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppColors.turuncu),
+                      ),
+                      child: const Text('← Geri'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  turkceBuyukHarf(isletme?.isim ?? ''),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 22,
+                    color: AppColors.yazi,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ToplamSatiri(etiket: 'Toplam borç', tutar: hesaplananToplam),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _tutarController,
+                        textAlign: TextAlign.center,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [BinlikAyraciFormatter()],
+                        decoration: const InputDecoration(hintText: 'Borç Tutarı'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    _KameraButonu(
+                      secilenFoto: _secilenFoto,
+                      onSecildi: (dosya) => setState(() => _secilenFoto = dosya),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _kaydediliyor ? null : () => _kayitEkle(odemeMi: true),
                         style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: AppColors.turuncu),
+                          backgroundColor: AppColors.panel,
+                          side: const BorderSide(color: AppColors.yesilTik, width: 2),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          padding: const EdgeInsets.symmetric(vertical: 18),
                         ),
-                        child: const Text('← Geri'),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'Ödeme Yap',
+                              style: AppTheme.anaButonYazi().copyWith(color: AppColors.yesilTik),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text('✔✔', style: TextStyle(color: AppColors.yesilTik, fontSize: 13)),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    turkceBuyukHarf(isletme?.isim ?? ''),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 22,
-                      color: AppColors.yazi,
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  ToplamSatiri(etiket: 'Toplam borç', tutar: hesaplananToplam),
-
-                  // Tutar kutusu + kamera aynı satırda
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _tutarController,
-                          textAlign: TextAlign.center,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [BinlikAyraciFormatter()],
-                          decoration: const InputDecoration(hintText: 'Borç Tutarı'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      _KameraButonu(
-                        secilenFoto: _secilenFoto,
-                        onSecildi: (dosya) => setState(() => _secilenFoto = dosya),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Ödeme Yap (solda, yeşil) + Borç ekle (sağda, turuncu) — eşit genişlik
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _kaydediliyor ? null : () => _kayitEkle(odemeMi: true),
-                          style: OutlinedButton.styleFrom(
-                            backgroundColor: AppColors.panel,
-                            side: const BorderSide(color: AppColors.yesilTik, width: 2),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                            padding: const EdgeInsets.symmetric(vertical: 18),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                'Ödeme Yap',
-                                style: AppTheme.anaButonYazi().copyWith(color: AppColors.yesilTik),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _kaydediliyor ? null : () => _kayitEkle(odemeMi: false),
+                        style: AppTheme.anaButonStili(),
+                        child: _kaydediliyor
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text('Borç ekle', style: AppTheme.anaButonYazi()),
+                                  const SizedBox(width: 8),
+                                  const Text('✔✔', style: TextStyle(color: AppColors.yesilTik, fontSize: 13)),
+                                ],
                               ),
-                              const SizedBox(width: 8),
-                              const Text('✔✔', style: TextStyle(color: AppColors.yesilTik, fontSize: 13)),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _kaydediliyor ? null : () => _kayitEkle(odemeMi: false),
-                          style: AppTheme.anaButonStili(),
-                          child: _kaydediliyor
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text('Borç ekle', style: AppTheme.anaButonYazi()),
-                                    const SizedBox(width: 8),
-                                    const Text('✔✔', style: TextStyle(color: AppColors.yesilTik, fontSize: 13)),
-                                  ],
-                                ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.panel,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.cizgi),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String?>(
-                        value: _seciliFiltre,
-                        isExpanded: true,
-                        dropdownColor: AppColors.panel,
-                        icon: const Icon(Icons.filter_list, color: AppColors.turuncu, size: 18),
-                        hint: const Text(
-                          'Tüm Borçlar',
-                          style: TextStyle(color: AppColors.yaziSoluk, fontSize: 13),
-                        ),
-                        style: const TextStyle(color: AppColors.yazi, fontSize: 13),
-                        items: [
-                          const DropdownMenuItem<String?>(
-                            value: null,
-                            child: Text('Tüm Borçlar', style: TextStyle(color: AppColors.yaziSoluk)),
-                          ),
-                          ..._filtreSecenekleri.map(
-                            (secenek) => DropdownMenuItem<String?>(
-                              value: secenek,
-                              child: Text(secenek),
-                            ),
-                          ),
-                        ],
-                        onChanged: (yeniDeger) => setState(() => _seciliFiltre = yeniDeger),
                       ),
                     ),
-                  ),
+                  ],
+                ),
 
-                  const SizedBox(height: 24),
-                  const Text(
-                    'GEÇMİŞ KAYITLAR',
-                    style: TextStyle(fontSize: 12, letterSpacing: 1, color: AppColors.yaziSoluk),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.panel,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.cizgi),
                   ),
-                  const SizedBox(height: 10),
-                  Expanded(
-                    child: Builder(
-                      builder: (context) {
-                        final kayitlar = _filtrele(tumKayitlar);
-                        if (kayitlar.isEmpty) {
-                          return Center(
-                            child: Text(
-                              _seciliFiltre == null
-                                  ? 'Henüz kayıt yok.'
-                                  : 'Bu filtreye uygun kayıt yok.',
-                              style: const TextStyle(color: AppColors.yaziSoluk),
-                            ),
-                          );
-                        }
-                        return ListView.builder(
-                          itemCount: kayitlar.length,
-                          itemBuilder: (context, index) {
-                            final kayit = kayitlar[index];
-                            return _DuzenlenebilirKayitSatiri(
-                              kayit: kayit,
-                              secili: _seciliKayitId == kayit.id,
-                              onUzunBas: () => setState(() => _seciliKayitId = kayit.id),
-                              onFotoTikla: kayit.fotoUrl == null
-                                  ? null
-                                  : () => fisiBuyukGoster(context, kayit.fotoUrl!),
-                              onDuzenle: (yeniTutar) async {
-                                await widget.firestoreService.kayitDuzenle(
-                                  isId: widget.isId,
-                                  isletmeId: widget.isletmeId,
-                                  kayitId: kayit.id,
-                                  eskiTutar: kayit.tutar,
-                                  yeniTutar: yeniTutar,
-                                  tur: kayit.tur,
-                                );
-                                setState(() => _seciliKayitId = null);
-                              },
-                            );
-                          },
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String?>(
+                      value: _seciliFiltre,
+                      isExpanded: true,
+                      dropdownColor: AppColors.panel,
+                      icon: const Icon(Icons.filter_list, color: AppColors.turuncu, size: 18),
+                      hint: const Text(
+                        'Tüm Borçlar',
+                        style: TextStyle(color: AppColors.yaziSoluk, fontSize: 13),
+                      ),
+                      style: const TextStyle(color: AppColors.yazi, fontSize: 13),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('Tüm Borçlar', style: TextStyle(color: AppColors.yaziSoluk)),
+                        ),
+                        ..._filtreSecenekleri.map(
+                          (secenek) => DropdownMenuItem<String?>(
+                            value: secenek,
+                            child: Text(secenek),
+                          ),
+                        ),
+                      ],
+                      onChanged: (yeniDeger) => setState(() => _seciliFiltre = yeniDeger),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+                const Text(
+                  'GEÇMİŞ KAYITLAR',
+                  style: TextStyle(fontSize: 12, letterSpacing: 1, color: AppColors.yaziSoluk),
+                ),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: Builder(
+                    builder: (context) {
+                      final kayitlar = _filtrele(tumKayitlar);
+                      if (kayitlar.isEmpty) {
+                        return Center(
+                          child: Text(
+                            _seciliFiltre == null
+                                ? 'Henüz kayıt yok.'
+                                : 'Bu filtreye uygun kayıt yok.',
+                            style: const TextStyle(color: AppColors.yaziSoluk),
+                          ),
                         );
-                      },
-                    ),
+                      }
+                      return ListView.builder(
+                        itemCount: kayitlar.length,
+                        itemBuilder: (context, index) {
+                          final kayit = kayitlar[index];
+                          return _DuzenlenebilirKayitSatiri(
+                            kayit: kayit,
+                            secili: _seciliKayitId == kayit.id,
+                            onUzunBas: () => setState(() => _seciliKayitId = kayit.id),
+                            onFotoTikla: kayit.fotoUrl == null
+                                ? null
+                                : () => fisiBuyukGoster(context, kayit.fotoUrl!),
+                            onDuzenle: (yeniTutar) async {
+                              await widget.firestoreService.kayitDuzenle(
+                                isId: widget.isId,
+                                isletmeId: widget.isletmeId,
+                                kayitId: kayit.id,
+                                eskiTutar: kayit.tutar,
+                                yeniTutar: yeniTutar,
+                                tur: kayit.tur,
+                              );
+                              setState(() => _seciliKayitId = null);
+                            },
+                          );
+                        },
+                      );
+                    },
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
-      );
+      ),
+    );
   }
 }
 
 /// Kamera butonu — metalik gri kenarlık, seçilen fotoğrafı küçük bir
-/// önizleme olarak butonun üstünde gösterir.
+/// ikon olarak butonun üstünde gösterir. Basınca "Kameradan çek" /
+/// "Galeriden seç" seçim menüsü açılır.
 class _KameraButonu extends StatefulWidget {
   final File? secilenFoto;
   final ValueChanged<File?> onSecildi;
@@ -430,7 +420,7 @@ class _KameraButonuState extends State<_KameraButonu> {
 }
 
 /// Geçmiş kayıtlar listesindeki tek satır. Uzun basınca hafif "kabarır"
-/// ve "Düzenle" / "Sil" butonları belirir.
+/// ve "Tutar Düzenle" (fişi varsa "Fişi Gör" de) butonu belirir.
 class _DuzenlenebilirKayitSatiri extends StatefulWidget {
   final KayitModel kayit;
   final bool secili;
@@ -514,9 +504,7 @@ class _DuzenlenebilirKayitSatiriState extends State<_DuzenlenebilirKayitSatiri> 
 
     return GestureDetector(
       onLongPress: widget.onUzunBas,
-      onTap: () {}, // Boş dokunuşu "yutar" — üstteki ekran genelindeki
-      // GestureDetector'a ulaşmasını engeller, böylece satırın kendisine
-      // dokunmak seçimi KAPATMAZ (sadece dışarıya dokunmak kapatır).
+      onTap: () {},
       child: AnimatedScale(
         scale: widget.secili ? 1.03 : 1.0,
         duration: const Duration(milliseconds: 150),
