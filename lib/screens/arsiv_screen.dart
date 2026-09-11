@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../widgets/ortak_widgetlar.dart';
 import '../widgets/profil_paneli.dart';
 import '../widgets/isciler_paneli.dart';
+import '../widgets/is_canli_toplam.dart';
 import '../widgets/yeni_is_modal.dart';
 import 'is_detay_screen.dart';
 
@@ -168,6 +169,7 @@ class _ArsivScreenState extends State<ArsivScreen> {
                 final is_ = isler[index];
                 return _IsSatiri(
                   is_: is_,
+                  firestoreService: widget.firestoreService,
                   secili: _seciliIsId == is_.id,
                   onUzunBas: () => setState(() => _seciliIsId = is_.id),
                   onTap: () {
@@ -206,6 +208,7 @@ class _ArsivScreenState extends State<ArsivScreen> {
 /// iş detayına götürür.
 class _IsSatiri extends StatelessWidget {
   final IsModel is_;
+  final FirestoreService firestoreService;
   final bool secili;
   final VoidCallback onUzunBas;
   final VoidCallback onTap;
@@ -214,6 +217,7 @@ class _IsSatiri extends StatelessWidget {
 
   const _IsSatiri({
     required this.is_,
+    required this.firestoreService,
     required this.secili,
     required this.onUzunBas,
     required this.onTap,
@@ -253,9 +257,13 @@ class _IsSatiri extends StatelessWidget {
                   ],
                 )
               else
-                Text(
-                  '₺${paraFormatla(is_.toplam)}',
-                  style: AppTheme.paraStili(),
+                IsCanliToplam(
+                  isId: is_.id,
+                  firestoreService: firestoreService,
+                  builder: (context, toplam) => Text(
+                    '₺${paraFormatla(toplam)}',
+                    style: AppTheme.paraStili(),
+                  ),
                 ),
             ],
           ),
