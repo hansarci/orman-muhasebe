@@ -2,11 +2,13 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../models/is_model.dart';
 import '../models/isletme_model.dart';
+import '../models/kayit_model.dart';
 import '../services/firestore_service.dart';
 import '../services/pdf_service.dart';
 import '../services/photo_upload_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/fis_foto_secici.dart';
+import '../widgets/is_canli_toplam.dart';
 import '../widgets/ortak_widgetlar.dart';
 import 'isletme_detay_screen.dart';
 
@@ -146,7 +148,12 @@ class _IsDetayScreenState extends State<IsDetayScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                ToplamSatiri(etiket: 'Toplam masraf', tutar: is_?.toplam ?? 0),
+                IsCanliToplam(
+                  isId: widget.isId,
+                  firestoreService: widget.firestoreService,
+                  builder: (context, toplam) =>
+                      ToplamSatiri(etiket: 'Toplam masraf', tutar: toplam),
+                ),
                 Row(
                   children: [
                     Expanded(
@@ -216,19 +223,30 @@ class _IsDetayScreenState extends State<IsDetayScreen> {
                         itemCount: isletmeler.length,
                         itemBuilder: (context, index) {
                           final isletme = isletmeler[index];
-                          return KayitSatiri(
-                            isim: isletme.isim,
-                            tutar: isletme.toplam,
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => IsletmeDetayScreen(
-                                    isId: widget.isId,
-                                    isletmeId: isletme.id,
-                                    firestoreService: widget.firestoreService,
-                                    photoUploadService: widget.photoUploadService,
-                                  ),
-                                ),
+                          return StreamBuilder<List<KayitModel>>(
+                            stream: widget.firestoreService
+                                .kayitlarStream(widget.isId, isletme.id),
+                            builder: (context, kayitSnap) {
+                              final kayitlar = kayitSnap.data ?? [];
+                              final canliToplam = kayitlar.fold<double>(
+                                0,
+                                (t, k) => t + (k.odemeMi ? -k.tutar : k.tutar),
+                              );
+                              return KayitSatiri(
+                                isim: isletme.isim,
+                                tutar: canliToplam,
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => IsletmeDetayScreen(
+                                        isId: widget.isId,
+                                        isletmeId: isletme.id,
+                                        firestoreService: widget.firestoreService,
+                                        photoUploadService: widget.photoUploadService,
+                                      ),
+                                    ),
+                                  );
+                                },
                               );
                             },
                           );
