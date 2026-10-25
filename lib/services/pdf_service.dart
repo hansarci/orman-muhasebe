@@ -60,6 +60,7 @@ class PdfService {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(28),
+        maxPages: 200,
         header: (context) => _baslikOlustur(
           is_,
           boldFont,
@@ -74,11 +75,11 @@ class PdfService {
             pw.Text('Bu işin altında henüz işletme eklenmedi.',
                 style: pw.TextStyle(font: regularFont, fontSize: 11)),
           for (final isletme in isletmeler) ...[
-            _isletmeBolumu(isletme, isletmeKayitlari[isletme] ?? [], regularFont, boldFont),
+            ..._isletmeBolumu(isletme, isletmeKayitlari[isletme] ?? [], regularFont, boldFont),
             pw.SizedBox(height: 16),
           ],
           if (gelirler.isNotEmpty) ...[
-            _gelirBolumu(gelirler, regularFont, boldFont),
+            ..._gelirBolumu(gelirler, regularFont, boldFont),
             pw.SizedBox(height: 16),
           ],
           _ozetBolumu(kazanilan, toplamMasraf, kar, regularFont, boldFont),
@@ -157,7 +158,7 @@ class PdfService {
     );
   }
 
-  pw.Widget _isletmeBolumu(
+  List<pw.Widget> _isletmeBolumu(
     IsletmeModel isletme,
     List<KayitModel> kayitlar,
     pw.Font regularFont,
@@ -167,98 +168,86 @@ class PdfService {
     final borcToplami = kayitlar.where((k) => !k.odemeMi).fold<double>(0, (t, k) => t + k.tutar);
     final kalan = borcToplami - odenen;
 
-    return pw.Container(
-      decoration: pw.BoxDecoration(
-        border: pw.Border.all(color: PdfColors.grey300),
-        borderRadius: pw.BorderRadius.circular(4),
-      ),
-      padding: const pw.EdgeInsets.all(10),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
+    return [
+      pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
+          pw.Text(isletme.isim, style: pw.TextStyle(font: boldFont, fontSize: 13)),
           pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              pw.Text(isletme.isim, style: pw.TextStyle(font: boldFont, fontSize: 13)),
-              pw.Row(
-                children: [
-                  pw.Text('Ödenen: ', style: pw.TextStyle(font: regularFont, fontSize: 9.5, color: PdfColors.grey700)),
-                  pw.Text('₺${_paraFormat.format(odenen)}',
-                      style: pw.TextStyle(font: boldFont, fontSize: 9.5, color: PdfColors.green700)),
-                  pw.SizedBox(width: 12),
-                  pw.Text('Kalan: ', style: pw.TextStyle(font: regularFont, fontSize: 9.5, color: PdfColors.grey700)),
-                  pw.Text('₺${_paraFormat.format(kalan)}',
-                      style: pw.TextStyle(font: boldFont, fontSize: 9.5, color: PdfColors.red800)),
-                ],
-              ),
+              pw.Text('Ödenen: ', style: pw.TextStyle(font: regularFont, fontSize: 9.5, color: PdfColors.grey700)),
+              pw.Text('₺${_paraFormat.format(odenen)}',
+                  style: pw.TextStyle(font: boldFont, fontSize: 9.5, color: PdfColors.green700)),
+              pw.SizedBox(width: 12),
+              pw.Text('Kalan: ', style: pw.TextStyle(font: regularFont, fontSize: 9.5, color: PdfColors.grey700)),
+              pw.Text('₺${_paraFormat.format(kalan)}',
+                  style: pw.TextStyle(font: boldFont, fontSize: 9.5, color: PdfColors.red800)),
             ],
           ),
-          pw.SizedBox(height: 6),
-          if (kayitlar.isEmpty)
-            pw.Text('Kayıt yok.',
-                style: pw.TextStyle(font: regularFont, fontSize: 9, color: PdfColors.grey600))
-          else
-            pw.Table(
-              columnWidths: const {
-                0: pw.FlexColumnWidth(2),
-                1: pw.FlexColumnWidth(1.4),
-                2: pw.FlexColumnWidth(2),
-              },
-              children: [
-                pw.TableRow(
-                  decoration: const pw.BoxDecoration(color: PdfColors.grey200),
-                  children: [
-                    _hucre('Tarih', boldFont, baslikMi: true),
-                    _hucre('Tür', boldFont, baslikMi: true),
-                    _hucre('Tutar', boldFont, baslikMi: true, sagaYasli: true),
-                  ],
-                ),
-                for (final kayit in kayitlar)
-                  pw.TableRow(
-                    children: [
-                      _hucre(DateFormat('dd.MM.yyyy').format(kayit.tarih), regularFont),
-                      _hucre(kayit.odemeMi ? 'Ödeme' : 'Borç', regularFont),
-                      _hucre(
-                        '${kayit.odemeMi ? '- ' : ''}₺${_paraFormat.format(kayit.tutar)}',
-                        regularFont,
-                        sagaYasli: true,
-                      ),
-                    ],
-                  ),
-              ],
-            ),
         ],
       ),
-    );
-  }
-
-  pw.Widget _gelirBolumu(List<GelirModel> gelirler, pw.Font regularFont, pw.Font boldFont) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Text(
-          'KAZANÇ KAYITLARI',
-          style: pw.TextStyle(font: boldFont, fontSize: 10, color: PdfColors.grey700),
-        ),
-        pw.SizedBox(height: 6),
-        for (final gelir in gelirler)
-          pw.Container(
-            decoration: const pw.BoxDecoration(
-              border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey200)),
-            ),
-            padding: const pw.EdgeInsets.symmetric(vertical: 5, horizontal: 4),
-            child: pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      pw.SizedBox(height: 6),
+      if (kayitlar.isEmpty)
+        pw.Text('Kayıt yok.',
+            style: pw.TextStyle(font: regularFont, fontSize: 9, color: PdfColors.grey600))
+      else
+        pw.Table(
+          border: pw.TableBorder.all(color: PdfColors.grey300),
+          columnWidths: const {
+            0: pw.FlexColumnWidth(2),
+            1: pw.FlexColumnWidth(1.4),
+            2: pw.FlexColumnWidth(2),
+          },
+          children: [
+            pw.TableRow(
+              decoration: const pw.BoxDecoration(color: PdfColors.grey200),
               children: [
-                pw.Text(DateFormat('dd.MM.yyyy').format(gelir.tarih),
-                    style: pw.TextStyle(font: regularFont, fontSize: 10)),
-                pw.Text('₺${_paraFormat.format(gelir.tutar)}',
-                    style: pw.TextStyle(font: boldFont, fontSize: 10, color: PdfColors.green700)),
+                _hucre('Tarih', boldFont, baslikMi: true),
+                _hucre('Tür', boldFont, baslikMi: true),
+                _hucre('Tutar', boldFont, baslikMi: true, sagaYasli: true),
               ],
             ),
+            for (final kayit in kayitlar)
+              pw.TableRow(
+                children: [
+                  _hucre(DateFormat('dd.MM.yyyy').format(kayit.tarih), regularFont),
+                  _hucre(kayit.odemeMi ? 'Ödeme' : 'Borç', regularFont),
+                  _hucre(
+                    '${kayit.odemeMi ? '- ' : ''}₺${_paraFormat.format(kayit.tutar)}',
+                    regularFont,
+                    sagaYasli: true,
+                  ),
+                ],
+              ),
+          ],
+        ),
+    ];
+  }
+
+  List<pw.Widget> _gelirBolumu(List<GelirModel> gelirler, pw.Font regularFont, pw.Font boldFont) {
+    return [
+      pw.Text(
+        'KAZANÇ KAYITLARI',
+        style: pw.TextStyle(font: boldFont, fontSize: 10, color: PdfColors.grey700),
+      ),
+      pw.SizedBox(height: 6),
+      for (final gelir in gelirler)
+        pw.Container(
+          decoration: const pw.BoxDecoration(
+            border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey200)),
           ),
-      ],
-    );
+          padding: const pw.EdgeInsets.symmetric(vertical: 5, horizontal: 4),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(DateFormat('dd.MM.yyyy').format(gelir.tarih),
+                  style: pw.TextStyle(font: regularFont, fontSize: 10)),
+              pw.Text('₺${_paraFormat.format(gelir.tutar)}',
+                  style: pw.TextStyle(font: boldFont, fontSize: 10, color: PdfColors.green700)),
+            ],
+          ),
+        ),
+    ];
   }
 
   pw.Widget _ozetBolumu(
